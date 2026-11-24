@@ -90,8 +90,9 @@ abstract public class AbstractCachedObject<T extends Serializable> implements Ca
         {
             T obj = this.objRef.get();
 
-            if (obj == null) throw new IllegalStateException();
-            else this.save(obj);
+            // if the object was garbage collected, there is nothing in memory to save
+            // and the storage still holds the last committed state
+            if (obj != null) this.save(obj);
         }
     }
 

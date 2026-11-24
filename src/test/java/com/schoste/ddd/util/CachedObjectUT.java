@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 import org.junit.Assert;
+import org.junit.Assume;
 import org.junit.Test;
 
 /**
@@ -117,6 +118,33 @@ abstract public class CachedObjectUT
             Assert.assertTrue(Integer.valueOf(1024).equals(actualObj));
             Assert.assertTrue(actualObj.equals(Integer.valueOf(1024)));
             Assert.assertFalse(actualObj == Integer.valueOf(1024));
+        }
+    }
+
+    /**
+     * Asserts that {@link com.schoste.ddd.util.AbstractCachedObject#commit()} does nothing (and doesn't throw)
+     * if the cached object was already garbage collected, and that the storage keeps the last committed state.
+     * Garbage collection is simulated by clearing the weak reference, so the test does not depend on when the GC runs.
+     * Only applies to implementations which derive from {@link com.schoste.ddd.util.AbstractCachedObject}.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testCommitAfterGC() throws Exception
+    {
+        ArrayList<String> oneInstance = new ArrayList<>(Arrays.asList("committed"));
+
+        try(CachedObject<ArrayList<String>> testObj = this.createCachedObj(oneInstance))
+        {
+            Assume.assumeTrue(testObj instanceof AbstractCachedObject);
+
+            oneInstance.add("not committed");
+
+            ((AbstractCachedObject<?>) testObj).objRef.clear();
+
+            testObj.commit();
+
+            Assert.assertEquals(Arrays.asList("committed"), testObj.get());
         }
     }
 

@@ -22,7 +22,14 @@ public interface CachedObject<T> extends Cloneable, Closeable, Serializable
 
     /**
      * Write the data of the cached object to the underlying storage.
-     * 
+     * <p>
+     * If the cached object is no longer in memory (it was garbage collected), there is nothing to write
+     * and this method does nothing: the storage still holds the last committed state.
+     * Therefore, changes to the cached object must be committed while a reference to it is still held,
+     * otherwise they are lost.
+     * </p>
+     *
+     * @throws IllegalStateException if the instance was closed or not initialized
      * @throws Exception re-throws every exception
      */
     public void commit() throws Exception;
