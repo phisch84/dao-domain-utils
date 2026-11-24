@@ -74,6 +74,11 @@
                     <configuration>
                         <reuseForks>false</reuseForks>
                         <forkCount>1</forkCount>
+                        <!-- Test classes are named *UT (unit test), which Surefire does not pick up by default.
+                             Abstract classes (e.g. the contract tests) are skipped automatically. -->
+                        <includes>
+                            <include>**/*UT.java</include>
+                        </includes>
                     </configuration>
                 </plugin>
             </plugins>
