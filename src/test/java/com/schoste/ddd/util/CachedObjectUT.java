@@ -4,6 +4,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -17,6 +19,7 @@ abstract public class CachedObjectUT
 {
     abstract protected CachedObject<Integer> createCachedObj(Integer objToCache) throws Exception;
     abstract protected CachedObject<String> createCachedObj(String objToCache) throws Exception;
+    abstract protected CachedObject<ArrayList<String>> createCachedObj(ArrayList<String> objToCache) throws Exception;
 
     /**
      * Asserts that the constructor works without exceptions
@@ -190,6 +193,39 @@ abstract public class CachedObjectUT
             Assert.assertTrue(oneInstance.equals(clonedInstance));
             Assert.assertTrue(clonedInstance.equals(oneInstance));
             Assert.assertFalse(oneInstance == clonedInstance);
+        }
+    }
+
+    /**
+     * Asserts that {@link com.schoste.ddd.util.AbstractCachedObject#clone()} clones the current state of the cached object
+     * <ul>
+     * <li>including changes which were not committed yet,</li>
+     * <li>and that the clone holds its own copy, so changes to one instance do not affect the other.</li>
+     * </ul>
+     *
+     * @throws Exception re-throws every exception
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testCloneIncludesUncommittedChanges() throws Exception
+    {
+        ArrayList<String> oneInstance = new ArrayList<>(Arrays.asList("committed"));
+
+        try(CachedObject<ArrayList<String>> oneCachedObj = this.createCachedObj(oneInstance))
+        {
+            oneInstance.add("uncommitted");
+
+            try(CachedObject<ArrayList<String>> clonedCachedObj = (CachedObject<ArrayList<String>>) oneCachedObj.clone())
+            {
+                ArrayList<String> clonedInstance = clonedCachedObj.get();
+
+                Assert.assertEquals(Arrays.asList("committed", "uncommitted"), clonedInstance);
+                Assert.assertFalse(oneInstance == clonedInstance);
+
+                clonedInstance.add("changed in clone");
+
+                Assert.assertEquals(Arrays.asList("committed", "uncommitted"), oneCachedObj.get());
+            }
         }
     }
 }

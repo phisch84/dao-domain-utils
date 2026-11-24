@@ -231,20 +231,28 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         }
     }
 
-    /**    (non-Javadoc)
-     * 
+    /**
+     * Creates a clone from the current state of the cached object (see {@link #get()}),
+     * including changes which were not committed yet.
+     * The clone writes a copy of the object into its own cache file in the same folder and holds its own instance of the object,
+     * so changes to the object of one instance do not affect the other.
+     *
      * @see java.lang.Object#clone()
      * @return a clone of this instance
      * @throws CloneNotSupportedException thrown if cloning failed. The stack trace of the original exception is written to {@link System#err}
      */
-    @Override 
+    @Override
     public Object clone() throws CloneNotSupportedException
     {
         try
         {
             String storagePath = this.cacheFile.getParent();
-            T objToClone = this.load();
+            T objToClone = this.get();
             CachedObjectImpl<T> clone = new CachedObjectImpl<>(objToClone, storagePath);
+
+            // the constructor references objToClone, which is the object of this instance;
+            // the clone must reference its own copy, which is loaded from its cache file
+            clone.objRef = new WeakReference<T>(clone.load());
 
             return clone;
         }
