@@ -17,7 +17,7 @@ import org.junit.Test;
  * like {@link com.schoste.ddd.util.fs.CachedObjectImpl}.
  * Since all implementations are supposed to behave the same way, their common tests are collected in this class
  */
-abstract public class CachedObjectUT 
+abstract public class CachedObjectUT
 {
     abstract protected CachedObject<Integer> createCachedObj(Integer objToCache) throws Exception;
     abstract protected CachedObject<String> createCachedObj(String objToCache) throws Exception;
@@ -25,7 +25,7 @@ abstract public class CachedObjectUT
 
     /**
      * Asserts that the constructor works without exceptions
-     * 
+     *
      * @throws Exception re-throws every exception
      */
     @Test
@@ -43,10 +43,10 @@ abstract public class CachedObjectUT
     /**
      * Asserts that the {@link com.schoste.ddd.util.AbstractCachedObject#get()} method returns the instance
      * for which the cached object was created, even before it was committed or garbage collected
-     * 
+     *
      * @throws Exception re-throws every exception
      */
-    @Test 
+    @Test
     public void testGetBeforeCommitAndBeforeGC() throws Exception
     {
         Integer expectedObj = Integer.valueOf(1024);
@@ -65,10 +65,10 @@ abstract public class CachedObjectUT
     /**
      * Asserts that {@link com.schoste.ddd.util.AbstractCachedObject#get()} gets the same object also
      * after {@link com.schoste.ddd.util.AbstractCachedObject#commit()} if the GC didn't run yet.
-     * 
+     *
      * @throws Exception re-throws every exception
      */
-    @Test 
+    @Test
     public void testGetAfterCommitAndBeforeGC() throws Exception
     {
         Integer expectedObj = Integer.valueOf(1024);
@@ -82,7 +82,7 @@ abstract public class CachedObjectUT
             Assert.assertNotNull(actualObj);
             Assert.assertTrue(expectedObj.equals(actualObj));
             Assert.assertTrue(actualObj.equals(expectedObj));
-            Assert.assertTrue(actualObj == expectedObj);            
+            Assert.assertTrue(actualObj == expectedObj);
         }
     }
 
@@ -198,7 +198,7 @@ abstract public class CachedObjectUT
      * <li>and {@link com.schoste.ddd.util.AbstractCachedObject#get()} of one instance is equal to {@link com.schoste.ddd.util.AbstractCachedObject#get()} of the cloned instance,</li>
      * <li>but {@link com.schoste.ddd.util.AbstractCachedObject#get()} of one instance != the instance of {@link com.schoste.ddd.util.AbstractCachedObject#get()} of the cloned instance,</li>
      * </ul>
-     * 
+     *
      * @throws Exception re-throws every exception
      */
     @SuppressWarnings("unchecked")

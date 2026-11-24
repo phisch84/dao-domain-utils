@@ -14,7 +14,7 @@ public interface CachedObject<T> extends Cloneable, Closeable, Serializable
     /**
      * Gets the cached object. If the object doesn't exist in memory (yet or anymore), it is loaded from the storage into memory and then returned.
      * Therefore it is not guaranteed that subsequent calls to this method will return the same instance.
-     * 
+     *
      * @return an instance of the cached object
      * @throws Exception re-throws every exception
      */
@@ -62,7 +62,7 @@ public interface CachedObject<T> extends Cloneable, Closeable, Serializable
     /**
      * Implements {@link java.lang.Object#equals(Object)}.
      * Two references of a {@link com.schoste.ddd.util.CachedObject} are considered equal if their cached objects are equal.
-     * 
+     *
      * @param other the other object to compare to
      * @return true if the cached object of other is equal to the cached object of this. False otherwise
      */

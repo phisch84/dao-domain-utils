@@ -11,6 +11,8 @@ that keeps a `Serializable` object only weakly in memory and reloads it from sto
   check, which fails the build on any finding.
 - The code must compile against **Java 8** (`maven.compiler.release=8`), even though newer JDKs build it.
   No `var`, records, `List.of`, text blocks, etc.
+- Formatting follows `.editorconfig`: UTF-8, LF line endings (enforced by `.gitattributes`), 4 spaces,
+  no tabs, no trailing whitespace, final newline.
 
 ## Javadoc rules (doclint, `failOnWarnings`)
 

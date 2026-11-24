@@ -7,7 +7,7 @@ import java.lang.ref.WeakReference;
  * Abstract implementation of an object which's data can be saved to and retrieved from a storage so that it doesn't need to be kept in memory.
  * The object to cache is kept in memory with a {@link WeakReference}. Therefore, when using this class in your implementation, make sure to
  * call {@link AbstractCachedObject#commit()} before the last hard reference is lost. Otherwise you may lose the object's data.
- * 
+ *
  * @param <T> the class of the object that is being cached.
  */
 abstract public class AbstractCachedObject<T extends Serializable> implements CachedObject<T>
@@ -40,7 +40,7 @@ abstract public class AbstractCachedObject<T extends Serializable> implements Ca
     /**
      * The method to actually write the object data to the storage (the cache).
      * The persistence logic must be implemented by the deriving class.
-     * 
+     *
      * @param obj the object to cache
      * @throws Exception re-throws every exception
      */
@@ -49,14 +49,14 @@ abstract public class AbstractCachedObject<T extends Serializable> implements Ca
     /**
      * The method to actually read the object data from the storage (the cache).
      * The persistence logic must be implemented by the deriving class.
-     * 
+     *
      * @return the cached object's data
      * @throws Exception re-throws every exception
      */
     abstract protected T load() throws Exception;
 
     /**    (non-Javadoc)
-     * 
+     *
      * @see com.schoste.ddd.util.CachedObject#get()
      */
     public T get() throws IllegalStateException, Exception
@@ -79,7 +79,7 @@ abstract public class AbstractCachedObject<T extends Serializable> implements Ca
     }
 
     /**    (non-Javadoc)
-     * 
+     *
      * @see com.schoste.ddd.util.CachedObject#commit()
      */
     public void commit() throws IllegalStateException, Exception
@@ -97,14 +97,14 @@ abstract public class AbstractCachedObject<T extends Serializable> implements Ca
     }
 
     /**    (non-Javadoc)
-     * 
+     *
      * @see java.lang.Object#clone()
      */
     @Override
     abstract public Object clone() throws CloneNotSupportedException;
 
     /**    (non-Javadoc)
-     * 
+     *
      * @see com.schoste.ddd.util.CachedObject#hashCode()
      */
     @Override
@@ -116,7 +116,7 @@ abstract public class AbstractCachedObject<T extends Serializable> implements Ca
     }
 
     /**    (non-Javadoc)
-     * 
+     *
      * @see java.lang.Object#equals(java.lang.Object)
      */
     @Override

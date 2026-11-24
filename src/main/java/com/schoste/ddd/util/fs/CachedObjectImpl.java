@@ -95,15 +95,15 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
 
         cacheFilesToDeleteOnExit.add(cacheFile.getAbsolutePath());
 
-		try (FileOutputStream fos = new FileOutputStream(cacheFile);
-			 ObjectOutputStream oos = new ObjectOutputStream(fos))
-		{
-			oos.writeObject(obj);
-		}
-		catch (Exception e)
-		{
-			throw e;
-		}
+        try (FileOutputStream fos = new FileOutputStream(cacheFile);
+             ObjectOutputStream oos = new ObjectOutputStream(fos))
+        {
+            oos.writeObject(obj);
+        }
+        catch (Exception e)
+        {
+            throw e;
+        }
 
         return cacheFile;
     }
@@ -122,7 +122,7 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
 
         fields.put("cacheFilePath", this.cacheFilePath);
         fields.put("objHashCode", this.objHashCode);
-    
+
         out.writeFields();
     }
 
@@ -162,7 +162,7 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
     protected transient File cacheFile;
 
     /**    (non-Javadoc)
-     * 
+     *
      * @see com.schoste.ddd.util.AbstractCachedObject#save(java.io.Serializable)
      */
     @Override
@@ -182,20 +182,20 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
     }
 
     /**    (non-Javadoc)
-     * 
+     *
      * @see com.schoste.ddd.util.AbstractCachedObject#load()
      */
     @Override
     @SuppressWarnings("unchecked")
     protected T load() throws Exception
     {
-		if ((this.cacheFile == null) || !this.cacheFile.exists()) throw new IllegalStateException();
+        if ((this.cacheFile == null) || !this.cacheFile.exists()) throw new IllegalStateException();
 
         try(FileInputStream fis = new FileInputStream(this.cacheFile);
             ObjectInputStream ois = new ObjectInputStream(fis))
         {
             T obj = (T) ois.readObject();
-            
+
             return obj;
         }
         catch (Exception ex)
@@ -212,7 +212,7 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
 
     /**
      * Creates a new instance for an object to cache
-     * 
+     *
      * @param object the instance to the object to cache
      * @throws IllegalArgumentException thrown if object is null
      * @throws IllegalStateException thrown if the cache file could not be created for whatever reason
@@ -226,7 +226,7 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
     /**
      * Creates a new instance for an object to cache
      * and allows to specify the folder where to store the cache file.
-     * 
+     *
      * @param object the instance to the object to cache
      * @param storagePath the folder of the cache file
      * @throws IllegalArgumentException thrown if object is null or if the storage path is either null or doesn't exist as directory
@@ -247,7 +247,7 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
     }
 
     /**    (non-Javadoc)
-     * 
+     *
      * @see java.io.Closeable#close()
      */
     @Override
@@ -296,7 +296,7 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
     }
 
     /**    (non-Javadoc)
-     * 
+     *
      * @see java.lang.Object#equals(java.lang.Object)
      */
     @SuppressWarnings("unchecked")

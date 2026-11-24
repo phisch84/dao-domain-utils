@@ -1,0 +1,8 @@
+# Text files are stored and checked out with LF on every OS (see also .editorconfig)
+* text=auto eol=lf
+
+# Windows scripts need CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+*.jar binary
