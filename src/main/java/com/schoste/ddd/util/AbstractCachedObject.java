@@ -28,6 +28,7 @@ abstract public class AbstractCachedObject<T extends Serializable> implements Ca
 
     /**
      * Hash code of the cached object, obtained when the cached instance was created.
+     * It is never recomputed, see {@link CachedObject#hashCode()}.
      */
     protected transient Integer objHashCode = null;
 

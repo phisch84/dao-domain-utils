@@ -38,7 +38,15 @@ public interface CachedObject<T> extends Cloneable, Closeable, Serializable
 
     /**
      * Implements {@link java.lang.Object#hashCode()}.
-     * 
+     * The hash code is obtained once when the cached instance is created and is never recomputed,
+     * so this method never reads from the storage and also works after {@link #close()}.
+     * <p>
+     * Therefore, changes to the cached object must not change its hash code
+     * (the same rule as for keys of a {@link java.util.HashMap}).
+     * Otherwise two instances may be {@link #equals(Object) equal} but have different hash codes,
+     * which breaks the contract of {@link java.lang.Object#hashCode()}.
+     * </p>
+     *
      * @return the hash code of the cached object that was obtained when the cached instance was created.
      * @throws IllegalStateException if the implementing class failed to register a hash code in its constructor
      */
