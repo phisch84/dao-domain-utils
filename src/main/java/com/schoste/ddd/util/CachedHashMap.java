@@ -16,6 +16,11 @@ import java.util.Map;
  *     or call {@link #commit()} to save all values in memory. Changes which were not saved are lost once the value was garbage collected.</li>
  * <li>Methods which return values (e.g. {@link #get(Object)}) are not guaranteed to return the instance which was put:
  *     once the value was garbage collected, they return a copy which was loaded from the storage.</li>
+ * <li>Methods which need all values ({@link #values()}, {@link #containsValue(Object)}, {@link #equals(Object)}, {@link #hashCode()},
+ *     {@link java.lang.Object#toString() toString()}, and iterating or streaming {@link #values()} and {@link #entrySet()}) load the values one at a time
+ *     and keep no references to them, so only the values the caller holds stay in memory. Each call reads all values from the storage, though,
+ *     which is slow for large maps. Methods which only need the keys ({@link #size()}, {@link #containsKey(Object)}, {@link #keySet()},
+ *     {@link java.util.Map.Entry#getKey()}) don't load any value.</li>
  * <li>Removing a value, replacing it with {@link #put(Object, Object)}, {@link #clear()} and {@link #close()} free the storage of the affected values.
  *     Close the map when it isn't needed anymore.</li>
  * <li>Null values are not supported, {@link #put(Object, Object)} throws a {@link NullPointerException} for them.</li>

@@ -4,9 +4,11 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Assert;
@@ -65,6 +67,24 @@ abstract public class CachedHashMapUT
         Assert.assertNotNull(cachedValue);
 
         return cachedValue;
+    }
+
+    /**
+     * Checks whether the value of a key is currently in memory (loaded) or only in the storage.
+     * Only applies to implementations which use {@link com.schoste.ddd.util.AbstractCachedObject}s;
+     * for others, the calling test is skipped.
+     *
+     * @param map the map
+     * @param key the key of the value
+     * @return true if the value is in memory
+     */
+    protected static boolean isLoaded(CachedHashMap<?, ?> map, Object key)
+    {
+        CachedObject<?> cachedValue = cachedValueOf(map, key);
+
+        Assume.assumeTrue(cachedValue instanceof AbstractCachedObject);
+
+        return ((AbstractCachedObject<?>) cachedValue).objRef.get() != null;
     }
 
     /**
@@ -422,6 +442,124 @@ abstract public class CachedHashMapUT
             Assert.assertEquals(testMap.keySet(), deserializedMap.keySet());
             Assert.assertEquals(list("1"), deserializedMap.get("one"));
             Assert.assertEquals(list("2", "2 committed"), deserializedMap.get("two"));
+        }
+    }
+
+    /**
+     * Asserts that methods which only need the keys don't load any value from the storage:
+     * {@link java.util.Map#size()}, {@link java.util.Map#containsKey(Object)}, iterating {@link java.util.Map#keySet()}
+     * and {@link java.util.Map.Entry#getKey()} of {@link java.util.Map#entrySet()}.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testKeysDontLoadValues() throws Exception
+    {
+        try (CachedHashMap<String, ArrayList<String>> testMap = this.createCachedMap())
+        {
+            testMap.put("one", list("1"));
+            testMap.put("two", list("2"));
+            simulateGC(testMap);
+
+            Assert.assertEquals(2, testMap.size());
+            Assert.assertTrue(testMap.containsKey("one"));
+
+            int keys = 0;
+
+            for (String key : testMap.keySet()) if (key != null) keys++;
+            for (Map.Entry<String, ArrayList<String>> entry : testMap.entrySet()) if (entry.getKey() != null) keys++;
+
+            Assert.assertEquals(4, keys);
+            Assert.assertFalse(isLoaded(testMap, "one"));
+            Assert.assertFalse(isLoaded(testMap, "two"));
+        }
+    }
+
+    /**
+     * Asserts that an entry of {@link java.util.Map#entrySet()} loads its value only when
+     * {@link java.util.Map.Entry#getValue()} is called.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testEntryLoadsValueOnGetValue() throws Exception
+    {
+        try (CachedHashMap<String, ArrayList<String>> testMap = this.createCachedMap())
+        {
+            testMap.put("one", list("1"));
+            testMap.put("two", list("2"));
+            simulateGC(testMap);
+
+            ArrayList<String> one = null;
+
+            for (Map.Entry<String, ArrayList<String>> entry : testMap.entrySet())
+            {
+                if ("one".equals(entry.getKey())) one = entry.getValue();
+            }
+
+            Assert.assertEquals(list("1"), one);
+            Assert.assertTrue(isLoaded(testMap, "one"));
+            Assert.assertFalse(isLoaded(testMap, "two"));
+        }
+    }
+
+    /**
+     * Asserts that iterating and streaming the values doesn't keep references to them:
+     * once the caller dropped the values, the GC can collect every one of them, so only the values the caller holds use memory.
+     * The test keeps a {@link java.lang.ref.WeakReference} to each returned value and runs the GC until all of them are cleared.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testValuesAreNotRetained() throws Exception
+    {
+        try (CachedHashMap<String, ArrayList<String>> testMap = this.createCachedMap())
+        {
+            for (int i = 0; i < 10; i++) testMap.put("key" + i, list("value" + i));
+
+            simulateGC(testMap);
+
+            List<WeakReference<ArrayList<String>>> returnedValues = new ArrayList<>();
+
+            for (ArrayList<String> value : testMap.values()) returnedValues.add(new WeakReference<>(value));
+
+            testMap.entrySet().stream().map(Map.Entry::getValue).forEach(value -> returnedValues.add(new WeakReference<>(value)));
+
+            Assert.assertEquals(20, returnedValues.size());
+
+            for (int i = 0; (i < 100) && returnedValues.stream().anyMatch(ref -> ref.get() != null); i++) System.gc();
+
+            Assert.assertTrue("the map kept references to its values", returnedValues.stream().allMatch(ref -> ref.get() == null));
+        }
+    }
+
+    /**
+     * Asserts that the methods which need all values (loaded one at a time) give the same results as for a
+     * {@link java.util.HashMap} with the same content: {@link java.util.Map#values()}, {@link java.util.Map#containsValue(Object)},
+     * {@link java.util.Map#equals(Object)}, {@link java.util.Map#hashCode()} and streams of the views.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testBulkMethods() throws Exception
+    {
+        try (CachedHashMap<String, ArrayList<String>> testMap = this.createCachedMap())
+        {
+            Map<String, ArrayList<String>> expected = new HashMap<>();
+
+            expected.put("one", list("1"));
+            expected.put("two", list("2"));
+            testMap.putAll(expected);
+            simulateGC(testMap);
+
+            Assert.assertTrue(testMap.containsValue(list("2")));
+            Assert.assertFalse(testMap.containsValue(list("3")));
+            Assert.assertTrue(testMap.equals(expected));
+            Assert.assertTrue(expected.equals(testMap));
+            Assert.assertEquals(expected.hashCode(), testMap.hashCode());
+            Assert.assertEquals(2, testMap.values().size());
+            Assert.assertTrue(testMap.values().containsAll(expected.values()));
+            Assert.assertEquals(1, testMap.values().stream().filter(list("1")::equals).count());
         }
     }
 

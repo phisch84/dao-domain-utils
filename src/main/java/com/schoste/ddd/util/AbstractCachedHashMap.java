@@ -19,7 +19,10 @@ import java.util.Set;
  * <p>
  * The map logic is inherited from {@link java.util.AbstractMap} and the wrapped values are kept in a {@link java.util.HashMap}.
  * Deriving classes only decide how a value is cached, see {@link #createCachedObject(Serializable)}.
- * {@link #entrySet()} is a view which loads a value only when {@link java.util.Map.Entry#getValue()} is called.
+ * {@link #entrySet()} is a view which loads a value only when {@link java.util.Map.Entry#getValue()} is called and keeps no reference to it.
+ * All other views and bulk methods of {@link java.util.AbstractMap} ({@link #keySet()}, {@link #values()}, {@link #containsValue(Object)},
+ * {@link #equals(Object)}, {@link #hashCode()}, {@link #toString()}) iterate over it, so they load the values one at a time
+ * and the GC can collect each one again; methods which only need the keys don't load any value.
  * </p>
  *
  * @param <K> the class of the map's keys
