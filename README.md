@@ -10,8 +10,11 @@ Requires Java 8 or newer. No runtime dependencies.
 |---|---|
 | [`CachedObject<T>`](#cachedobject) | Holds one `Serializable` object, keeps it in memory only weakly and reloads it from a storage on demand |
 | [`CachedHashMap<K, V>`](#cachedhashmap) | A `java.util.Map` whose values are each kept in a `CachedObject`, so large maps don't fill the heap |
+| [`NestedMap<K, V>`](#nestedmap) | A map of maps (a trie): a value is stored under a path of keys, e.g. `put("a", "b", "c", value)` |
+| [`CachedNestedMap<K, V>`](#cachednestedmap) | A `NestedMap` whose values are cached like in a `CachedHashMap` |
 
-Both come with a file system implementation in the package `com.schoste.ddd.util.fs`.
+The cached types come with a file system implementation in the package `com.schoste.ddd.util.fs`;
+`NestedHashMap` is the in-memory `NestedMap`.
 
 ## CachedObject
 
@@ -103,6 +106,92 @@ try (CachedHashMap<String, ArrayList<String>> map = new CachedHashMapImpl<>("/va
   Call `commit()` before serializing. The deserialized map shares the cache files with the original,
   so closing or removing values in one of them affects the other one too. The keys must be `Serializable`.
 
+## NestedMap
+
+`NestedMap<K, V>` stores values under a path of keys, like a map of maps but without creating the inner maps
+yourself. A shorter path (a prefix) leads to the nested map of that level. `NestedHashMap` keeps everything in
+memory and uses a `HashMap` for each level.
+
+```java
+import com.schoste.ddd.util.NestedHashMap;
+import com.schoste.ddd.util.NestedMap;
+
+NestedMap<String, Integer> map = new NestedHashMap<>();
+
+map.put("europe", "austria", "vienna", 1_982_000);
+map.put("europe", "austria", 9_160_000);         // a path can have a value and deeper keys
+map.put(Arrays.asList("a", "b", "c", "d", "e", "f"), 6);  // more than 5 keys: pass a list
+
+map.get("europe", "austria", "vienna");           // 1982000
+map.get("europe", "austria");                     // 9160000
+map.get("europe");                                // null: no value, only deeper keys
+
+NestedMap<String, Integer> austria = map.getSubMap("europe", "austria");
+
+austria.get("vienna");                            // 1982000
+austria.put("graz", 303_000);                     // the sub map is a live view: also map.get("europe", "austria", "graz")
+
+map.keySet();                                     // [europe, a]: the keys of the first level
+map.size();                                       // 4: all values at any depth
+```
+
+### Rules
+
+- **Paths**: `put` takes 1 to 5 keys and the value; longer paths use `put(List<K> keys, V value)`.
+  `get`, `containsKey`, `remove` and `getSubMap` take any number of keys. A path for a value needs at least one key
+  (`IllegalArgumentException` otherwise).
+- **A path can have a value and deeper keys.** `get` returns `null` for a path without a value, also if it has deeper keys.
+  Check for deeper keys with `!map.getSubMap(keys).isEmpty()`.
+- **Sub maps are live views** of their path: changes are visible in both directions. The sub map of a path that
+  doesn't exist is empty, and `put` through it creates the path. `getSubMap()` without keys returns the map itself.
+- **`remove` removes only the value**; deeper keys stay. Levels without values and deeper keys are removed.
+  To remove a path with everything below it: `map.getSubMap(keys).clear(); map.remove(keys);`
+- **`clear()` of a sub map** removes everything below its path, but not the value at the path itself.
+- **`size()` counts all values** at any depth; `keySet()` returns a copy of the keys of the first level.
+- **No `null` values** (`NullPointerException`). `null` keys are allowed; cast a single `null` key to the key class,
+  `put((String) null, value)`, because `put(null, value)` also matches `put(List, V)`.
+- **`clone()`** copies all levels; `NestedHashMap` shares the value instances with the clone (like `HashMap`).
+  A sub map can't be cloned (`CloneNotSupportedException`).
+- **Serializable** if the keys and values are. A serialized sub map includes the whole map it is a view of.
+- `NestedMap` is not a `java.util.Map`, because a path has several keys.
+
+## CachedNestedMap
+
+`CachedNestedMap<K, V>` is a `NestedMap` whose values are cached like in a `CachedHashMap`: the keys stay in memory,
+each value is kept in memory only weakly and loaded from the storage when needed. `fs.CachedNestedHashMapImpl`
+uses an `fs.CachedHashMapImpl` for the values of each level, so each value has its own cache file in
+`java.io.tmpdir` or in a folder you choose.
+
+```java
+import com.schoste.ddd.util.CachedNestedMap;
+import com.schoste.ddd.util.fs.CachedNestedHashMapImpl;
+
+try (CachedNestedMap<String, ArrayList<String>> map = new CachedNestedHashMapImpl<>("/var/cache/my-app"))
+{
+    map.put("a", "b", new ArrayList<>(Arrays.asList("1")));  // put() saves the value
+
+    ArrayList<String> ab = map.get("a", "b");
+
+    ab.add("2");
+    map.put("a", "b", ab);  // save a changed value by putting it again ...
+    map.commit();           // ... or save all values in memory, on all levels
+}                           // close() deletes all cache files
+```
+
+### Rules
+
+All rules of [`NestedMap`](#nestedmap) apply, and the ones of [`CachedHashMap`](#cachedhashmap) for the values:
+
+- **Save changes** with `put` again or `commit()` while you hold a reference; unsaved changes are lost once the
+  value is garbage collected. **Values may be copies** loaded from the storage.
+- **Removing frees storage**: `remove`, replacing with `put`, `clear()` (also of a sub map) and `close()` delete
+  the cache files of the affected values. Close the map when you don't need it anymore.
+- **`commit()` and `close()` act on the whole map.** `getSubMap` returns a plain `NestedMap` view without them.
+- **`clone()` copies the current state**, including changes that weren't saved, into its own cache files.
+- **Serializing writes only references** (keys, storage path, paths of the cache files). Call `commit()` before
+  serializing; the deserialized map shares the cache files with the original.
+- **Storage errors** are thrown as `IllegalStateException` with the original exception as cause.
+
 ## Installation
 
 The library is published to GitHub Packages. Add the repository and the dependency to your `pom.xml`:
@@ -146,10 +235,12 @@ To store data somewhere else than in files (e.g. a database), implement the abst
 |---|---|---|
 | `CachedObject` | `AbstractCachedObject` | `save()`, `load()`, `clone()`, `equals()`, `close()` |
 | `CachedHashMap` | `AbstractCachedHashMap` | `createCachedObject(V)`, which wraps a value in your `CachedObject` |
+| `NestedMap` | `AbstractNestedMap` | `createValueMap()`, the map for the values of one level; `cloneValueMap(Map)` if the values should not be shared by clones |
+| `CachedNestedMap` | `AbstractNestedMap` | as for `NestedMap`, returning your `CachedHashMap`; plus `commit()`, `close()` and `cloneValueMap(Map)` (see `fs.CachedNestedHashMapImpl`) |
 
-The test-jar (`<classifier>tests</classifier>`) contains the abstract contract tests `CachedObjectUT` and
-`CachedHashMapUT`: derive your test classes from them and implement their factory methods to check that your
-implementation behaves like the others.
+The test-jar (`<classifier>tests</classifier>`) contains the abstract contract tests `CachedObjectUT`,
+`CachedHashMapUT`, `NestedMapUT` and `CachedNestedMapUT` (which includes `NestedMapUT`): derive your test classes
+from them and implement their factory methods to check that your implementation behaves like the others.
 
 ## Building
 

@@ -3,10 +3,12 @@
 Helper library for the DDD libraries [dao](https://github.com/phisch84/dao) and
 [domain-repository](https://github.com/phisch84/domain-repository): code that fits none of the
 infrastructure, domain or application layers. It provides memory-saving holders whose data lives in a
-storage and is kept in memory only weakly:
+storage and is kept in memory only weakly, and a map with key paths:
 
 - `CachedObject<T>`: one `Serializable` object, reloaded from storage on demand.
 - `CachedHashMap<K, V>`: a `java.util.Map` whose keys stay in memory and whose values are each a `CachedObject`.
+- `NestedMap<K, V>`: a map of maps (trie): `put(k1, k2, k3, v)`, `get(k1, k2, k3)`, `getSubMap(k1)`.
+  `NestedHashMap` is in memory; `CachedNestedMap` / `fs.CachedNestedHashMapImpl` caches the values.
 
 User-facing documentation is in `README.md`; the contract of each class is its Javadoc.
 
@@ -33,8 +35,16 @@ User-facing documentation is in `README.md`; the contract of each class is its J
 | `src/main/java/com/schoste/ddd/util/CachedHashMap.java` | Interface + usage rules of the map, adds `commit()` and `clone()` |
 | `src/main/java/com/schoste/ddd/util/AbstractCachedHashMap.java` | All map logic (extends `java.util.AbstractMap`); subclasses implement `createCachedObject(V)` |
 | `src/main/java/com/schoste/ddd/util/fs/CachedHashMapImpl.java` | Creates a `CachedObjectImpl` per value in `storagePath` |
+| `src/main/java/com/schoste/ddd/util/NestedMap.java` | Interface + usage rules of the nested map (not a `java.util.Map`) |
+| `src/main/java/com/schoste/ddd/util/AbstractNestedMap.java` | All nested-map logic (levels, sub-map views, pruning, clone); subclasses implement `createValueMap()` |
+| `src/main/java/com/schoste/ddd/util/NestedHashMap.java` | In-memory implementation: a `HashMap` per level |
+| `src/main/java/com/schoste/ddd/util/CachedNestedMap.java` | Interface: `NestedMap` + `commit()` + `Closeable`, rules of a cached nested map |
+| `src/main/java/com/schoste/ddd/util/fs/CachedNestedHashMapImpl.java` | A `CachedHashMapImpl` per level in `storagePath`; `commit`/`close`/`cloneValueMap` |
 | `src/test/java/com/schoste/ddd/util/CachedObjectUT.java` | Contract test for every `CachedObject` implementation |
 | `src/test/java/com/schoste/ddd/util/CachedHashMapUT.java` | Contract test for every `CachedHashMap` implementation |
+| `src/test/java/com/schoste/ddd/util/NestedMapUT.java` | Contract test for every `NestedMap` implementation |
+| `src/test/java/com/schoste/ddd/util/CachedNestedMapUT.java` | Contract test for every `CachedNestedMap` (extends `NestedMapUT`) |
+| `src/test/java/com/schoste/ddd/util/NestedHashMapUT.java` | Factory for `NestedMapUT` + `NestedHashMap` specific tests |
 | `src/test/java/com/schoste/ddd/util/fs/*ImplUT.java` | Factories for the contract tests + file-system specific tests |
 
 ## Architecture pattern (follow it for every new utility)
@@ -100,6 +110,34 @@ Checklist for a new utility or implementation:
   `CachedObject` is cloned, so the clone has its own storage and instances with the current state.
   If cloning fails, already cloned values are closed and `CloneNotSupportedException` (with cause) is thrown.
 
+### NestedMap / CachedNestedMap
+
+- `NestedMap` is its own interface, **not** a `java.util.Map` (a path has several keys). Reading/removing take
+  varargs (`get(K...)`, `containsKey`, `remove`, `getSubMap`); `put` has overloads for 1 to 5 keys plus
+  `put(List<K>, V)`, all delegating to `put(List, V)`. `put(null, v)` is ambiguous; callers cast the key.
+- Classic trie: a path can have a value **and** deeper keys; paths of any depth can be mixed.
+- `get` returns null for a path without value; null values are rejected (NPE), null keys allowed;
+  an empty path throws `IllegalArgumentException` (except `getSubMap()`, which returns `this`).
+- `size()`/`isEmpty()` count values at any depth; `keySet()` is a copy of the first-level keys.
+- **Structure** (`AbstractNestedMap`): private `Level` = `Map<K, V> values` (from `createValueMap()`, null while empty)
+  + `HashMap<K, Level> children`. Only the value map is storage-specific; keys and levels are always in memory.
+- **Sub maps are live views by path**: private `SubMap extends AbstractNestedMap` shares the owner's `root` and
+  prefixes its `path`; every call resolves the path again, so a view survives pruning and re-creation. A missing
+  path gives an empty view; `put` through it creates the path. `clear()` on a view keeps the value at its path.
+- **Pruning**: `remove`/`clear` remove levels left without values and children (never the root); empty value maps are
+  dropped (set to null). `clear` empties every value map below, which frees cached storage.
+- `CachedNestedMap`: `commit()`/`close()` act on the whole map (via `getValueMaps()`); `getSubMap` returns a plain
+  `NestedMap`. `close()` closes every level's `CachedHashMapImpl` (first `IOException` thrown, others suppressed).
+- **Serialization**: levels and value maps are serialized as they are (cached: references only, shared cache files).
+  A serialized sub map includes its owner. Keys/values have no `Serializable` bound in `NestedMap`.
+- **`clone()`**: `super.clone()` + copy every level with `cloneValueMap(Map)` (default: new value map + `putAll`, i.e.
+  shared value instances like `HashMap`; `CachedNestedHashMapImpl` clones each `CachedHashMapImpl`). On failure the
+  copied part is cleared. `owner`/`root` are not `final` only because of `clone()`. Cloning a sub map throws
+  `CloneNotSupportedException` without cause.
+- `NestedHashMap` is in `com.schoste.ddd.util`, not in a sub-package, because it has no storage.
+- `commit()`/`close()` live in `fs.CachedNestedHashMapImpl`; extract an `AbstractCachedNestedMap` when a second
+  storage implementation appears.
+
 ## Code and Javadoc rules
 
 - The code must compile against **Java 8** (`maven.compiler.release=8`), even though newer JDKs build it.
@@ -122,7 +160,11 @@ Checklist for a new utility or implementation:
 - Don't rely on GC timing: simulate collection by clearing the weak reference (`objRef.clear()`), or wait on
   your own `WeakReference` with a bounded `System.gc()` loop and assert that it was cleared.
 - Helpers in `CachedHashMapUT`: `simulateGC(map)`, `cachedValueOf(map, key)`, `isLoaded(map, key)`,
-  `assertClosed(cachedObject)`, `serializeAndDeserialize(obj)`.
+  `assertClosed(cachedObject)`, `serializeAndDeserialize(obj)` (also in `NestedMapUT`, for sub-packages).
+- Helpers in `CachedNestedMapUT`: `valueMapsOf(map)`, `simulateGC(map)`, `cachedValuesOf(map)`,
+  `cachedValueWith(map, value)`. Its generic factory `createCachedNestedMap()` lets tests use mutable values
+  (`ArrayList`), while `NestedMapUT` uses `String` values.
+- `NestedMapUT` tests don't close cached maps; their few cache files are deleted by the shutdown hook.
 - Tests that need files use their own temporary folder (`Files.createTempDirectory`) and delete it in `finally`.
 
 ## Working in this repository
