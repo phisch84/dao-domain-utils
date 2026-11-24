@@ -5,8 +5,8 @@ import java.lang.ref.WeakReference;
 
 /**
  * Abstract implementation of an object which's data can be saved to and retrieved from a storage so that it doesn't need to be kept in memory.
- * The object to cache is kept in memory with a {@see WeakReference}. Therefore, when using this class in your implementation, make sure to
- * call {@see AbstractCachedObject#commit()} before the last hard reference is lost. Otherwise you may lose the object's data.
+ * The object to cache is kept in memory with a {@link WeakReference}. Therefore, when using this class in your implementation, make sure to
+ * call {@link AbstractCachedObject#commit()} before the last hard reference is lost. Otherwise you may lose the object's data.
  * 
  * @param <T> the class of the object that is being cached.
  */
@@ -15,9 +15,26 @@ abstract public class AbstractCachedObject<T extends Serializable> implements Ca
     @SuppressWarnings("unused")
     private static final long serialVersionUID = 42L;
 
+    /**
+     * Weak reference to the cached object, so that the garbage collector may reclaim it.
+     * Is null if the instance was not initialized or was closed.
+     */
     protected transient WeakReference<T> objRef;
+
+    /**
+     * Lock to synchronize access to {@link #objRef}.
+     */
     protected transient Object objRefLock = new Object();
+
+    /**
+     * Hash code of the cached object, obtained when the cached instance was created.
+     */
     protected transient Integer objHashCode = null;
+
+    /**
+     * Constructor for deriving classes, which must initialize {@link #objRef} and {@link #objHashCode}.
+     */
+    protected AbstractCachedObject() { }
 
     /**
      * The method to actually write the object data to the storage (the cache).

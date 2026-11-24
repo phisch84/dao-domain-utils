@@ -16,15 +16,18 @@ import java.nio.file.Paths;
 import com.schoste.ddd.util.AbstractCachedObject;
 
 /**
- * Implements {@see com.schoste.ddd.util.AbstractCachedObject}.
- * The objects are cached by serializing them into a temporary file on the file system, which is supposed to be deleted on exit (see {@see File#deleteOnExit()})
+ * Implements {@link com.schoste.ddd.util.AbstractCachedObject}.
+ * The objects are cached by serializing them into a temporary file on the file system, which is supposed to be deleted on exit (see {@link File#deleteOnExit()})
  * 
  * @param <T> the class of the object to cache
  */
 public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObject<T>
 {
+    /**
+     * Only the path to the cache file is serialized, not the cached object itself.
+     */
     @SuppressWarnings("unused")
-    static private final ObjectStreamField[] serialPersistentFields = 
+    static private final ObjectStreamField[] serialPersistentFields =
     {
         new ObjectStreamField("cacheFilePath", String.class),
     };
@@ -75,7 +78,14 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         return cacheFile;
     }
 
-    private void writeObject(ObjectOutputStream out) throws IOException 
+    /**
+     * Writes the path to the cache file.
+     *
+     * @serialData the absolute path to the cache file ({@code cacheFilePath})
+     * @param out the stream to write to
+     * @throws IOException if writing to the stream failed
+     */
+    private void writeObject(ObjectOutputStream out) throws IOException
     {
         ObjectOutputStream.PutField fields = out.putFields();
 
@@ -84,6 +94,14 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         out.writeFields();
     }
 
+    /**
+     * Reads the path to the cache file and loads the cached object from it.
+     *
+     * @param in the stream to read from
+     * @throws IOException if reading from the stream failed
+     * @throws ClassNotFoundException if the class of a serialized object could not be found
+     * @throws Exception re-throws every exception of loading the cached object
+     */
     private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException, Exception
     {
         ObjectInputStream.GetField fields = in.readFields();
@@ -100,7 +118,7 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
     protected String cacheFilePath;
 
     /**
-     * The cache file as {@see java.io.File} object.
+     * The cache file as {@link java.io.File} object.
      */
     protected transient File cacheFile;
 
@@ -149,7 +167,7 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
 
     /**
      * Constructor for serialization and deserializion.
-     * When used for any other purpose, the created instance is expect not work and its method will throw {@see java.lang.IllegalStateException}
+     * When used for any other purpose, the created instance is expect not work and its method will throw {@link java.lang.IllegalStateException}
      */
     public CachedObjectImpl() { }
 
@@ -207,7 +225,7 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
      * 
      * @see java.lang.Object#clone()
      * @return a clone of this instance
-     * @throws CloneNotSupportedException thrown if cloning failed. The stack trace of the original exception is written to {@link System.err}
+     * @throws CloneNotSupportedException thrown if cloning failed. The stack trace of the original exception is written to {@link System#err}
      */
     @Override 
     public Object clone() throws CloneNotSupportedException

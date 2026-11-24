@@ -27,9 +27,12 @@ public interface CachedObject<T> extends Cloneable, Closeable, Serializable
      */
     public void commit() throws Exception;
 
-    /**    (non-Javadoc)
-     * 
-     * @see java.lang.Object#clone()
+    /**
+     * Implements {@link java.lang.Object#clone()}.
+     * The clone caches its own copy of the object in its own storage.
+     *
+     * @return a clone of this instance
+     * @throws CloneNotSupportedException if the instance could not be cloned
      */
     public Object clone() throws CloneNotSupportedException;
 
