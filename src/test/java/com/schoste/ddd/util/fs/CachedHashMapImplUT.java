@@ -49,6 +49,40 @@ public class CachedHashMapImplUT extends CachedHashMapUT
     }
 
     /**
+     * Asserts that a clone stores its values in own cache files in the same storage path,
+     * and that closing the clone deletes only its own cache files.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testCloneHasOwnCacheFiles() throws Exception
+    {
+        File storage = Files.createTempDirectory(CachedHashMapImplUT.class.getSimpleName()).toFile();
+
+        try (CachedHashMapImpl<String, ArrayList<String>> testMap = new CachedHashMapImpl<>(storage.getAbsolutePath()))
+        {
+            testMap.put("one", new ArrayList<>(Arrays.asList("1")));
+            testMap.put("two", new ArrayList<>(Arrays.asList("2")));
+
+            CachedHashMapImpl<String, ArrayList<String>> clonedMap = (CachedHashMapImpl<String, ArrayList<String>>) testMap.clone();
+
+            Assert.assertEquals(testMap.storagePath, clonedMap.storagePath);
+            Assert.assertEquals(4, countFiles(storage));
+
+            clonedMap.close();
+
+            Assert.assertEquals(2, countFiles(storage));
+        }
+        finally
+        {
+            for (File file : storage.listFiles()) file.delete();
+
+            storage.delete();
+        }
+    }
+
+    /**
      * Asserts that each value has its own cache file in the storage path,
      * and that replacing, removing and closing delete the cache files of the affected values.
      *

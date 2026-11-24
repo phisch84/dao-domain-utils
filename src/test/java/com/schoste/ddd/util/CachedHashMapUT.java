@@ -446,6 +446,103 @@ abstract public class CachedHashMapUT
     }
 
     /**
+     * Asserts that {@link com.schoste.ddd.util.CachedHashMap#clone()} returns another instance
+     * <ul>
+     * <li>which is equal to the original one,</li>
+     * <li>with its own {@link com.schoste.ddd.util.CachedObject} for every value,</li>
+     * <li>whose values are equal to the original ones, but other instances.</li>
+     * </ul>
+     *
+     * @throws Exception re-throws every exception
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testClone() throws Exception
+    {
+        try (CachedHashMap<String, ArrayList<String>> testMap = this.createCachedMap())
+        {
+            testMap.put("one", list("1"));
+            testMap.put("two", list("2"));
+
+            try (CachedHashMap<String, ArrayList<String>> clonedMap = (CachedHashMap<String, ArrayList<String>>) testMap.clone())
+            {
+                Assert.assertNotNull(clonedMap);
+                Assert.assertFalse(testMap == clonedMap);
+                Assert.assertTrue(testMap.equals(clonedMap));
+                Assert.assertTrue(clonedMap.equals(testMap));
+
+                for (String key : testMap.keySet())
+                {
+                    Assert.assertFalse(cachedValueOf(testMap, key) == cachedValueOf(clonedMap, key));
+                    Assert.assertEquals(testMap.get(key), clonedMap.get(key));
+                    Assert.assertFalse(testMap.get(key) == clonedMap.get(key));
+                }
+            }
+        }
+    }
+
+    /**
+     * Asserts that {@link com.schoste.ddd.util.CachedHashMap#clone()} clones the current state of the values,
+     * including changes which were not committed yet, and that changes to the values of the clone don't affect the original.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testCloneIncludesUncommittedChanges() throws Exception
+    {
+        try (CachedHashMap<String, ArrayList<String>> testMap = this.createCachedMap())
+        {
+            testMap.put("key", list("committed"));
+
+            ArrayList<String> value = testMap.get("key");
+
+            value.add("not committed");
+
+            try (CachedHashMap<String, ArrayList<String>> clonedMap = (CachedHashMap<String, ArrayList<String>>) testMap.clone())
+            {
+                ArrayList<String> clonedValue = clonedMap.get("key");
+
+                Assert.assertEquals(list("committed", "not committed"), clonedValue);
+
+                clonedValue.add("changed in clone");
+                clonedMap.commit();
+
+                Assert.assertEquals(list("committed", "not committed"), testMap.get("key"));
+            }
+        }
+    }
+
+    /**
+     * Asserts that a clone is independent of the original map: adding, removing and closing in the clone
+     * doesn't affect the original.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testCloneIsIndependent() throws Exception
+    {
+        try (CachedHashMap<String, ArrayList<String>> testMap = this.createCachedMap())
+        {
+            testMap.put("one", list("1"));
+            testMap.put("two", list("2"));
+
+            CachedHashMap<String, ArrayList<String>> clonedMap = (CachedHashMap<String, ArrayList<String>>) testMap.clone();
+
+            clonedMap.put("three", list("3"));
+            clonedMap.remove("one");
+            clonedMap.close();
+            simulateGC(testMap);
+
+            Assert.assertEquals(2, testMap.size());
+            Assert.assertFalse(testMap.containsKey("three"));
+            Assert.assertEquals(list("1"), testMap.get("one"));
+            Assert.assertEquals(list("2"), testMap.get("two"));
+        }
+    }
+
+    /**
      * Asserts that methods which only need the keys don't load any value from the storage:
      * {@link java.util.Map#size()}, {@link java.util.Map#containsKey(Object)}, iterating {@link java.util.Map#keySet()}
      * and {@link java.util.Map.Entry#getKey()} of {@link java.util.Map#entrySet()}.

@@ -37,8 +37,9 @@ abstract public class AbstractCachedHashMap<K, V extends Serializable> extends A
      * The values of the map, each one wrapped in a {@link com.schoste.ddd.util.CachedObject}.
      * Serialized as it is, so a serialized map contains the keys and the serialized {@link com.schoste.ddd.util.CachedObject}s,
      * which refer to the storage of the values.
+     * Not final, because {@link #clone()} replaces it in the clone.
      */
-    protected final HashMap<K, CachedObject<V>> cachedValues = new HashMap<>();
+    protected HashMap<K, CachedObject<V>> cachedValues = new HashMap<>();
 
     /**
      * Wraps a value in a new {@link com.schoste.ddd.util.CachedObject}.
@@ -354,6 +355,51 @@ abstract public class AbstractCachedHashMap<K, V extends Serializable> extends A
     public void commit() throws Exception
     {
         for (CachedObject<V> cachedValue : this.cachedValues.values()) cachedValue.commit();
+    }
+
+    /**
+     * Creates the clone with {@link java.util.AbstractMap#clone()}, which copies all fields (also those of deriving classes),
+     * and gives it its own values by cloning every {@link com.schoste.ddd.util.CachedObject} (see {@link com.schoste.ddd.util.CachedObject#clone()}).
+     * If cloning a value fails, the values which were already cloned are closed again.
+     *
+     * @see com.schoste.ddd.util.CachedHashMap#clone()
+     * @return a clone of this instance
+     * @throws CloneNotSupportedException if the instance could not be cloned, with the original exception as cause
+     */
+    @Override
+    @SuppressWarnings("unchecked")
+    public Object clone() throws CloneNotSupportedException
+    {
+        AbstractCachedHashMap<K, V> clone = (AbstractCachedHashMap<K, V>) super.clone();
+
+        clone.cachedValues = new HashMap<>();
+
+        try
+        {
+            for (Map.Entry<K, CachedObject<V>> entry : this.cachedValues.entrySet())
+            {
+                clone.cachedValues.put(entry.getKey(), (CachedObject<V>) entry.getValue().clone());
+            }
+
+            return clone;
+        }
+        catch (Exception e)
+        {
+            try
+            {
+                clone.closeAll();
+            }
+            catch (IOException closeFailure)
+            {
+                e.addSuppressed(closeFailure);
+            }
+
+            CloneNotSupportedException failure = new CloneNotSupportedException(e.getMessage());
+
+            failure.initCause(e);
+
+            throw failure;
+        }
     }
 
     /**

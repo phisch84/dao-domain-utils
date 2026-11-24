@@ -49,4 +49,15 @@ public interface CachedHashMap<K, V extends Serializable> extends Map<K, V>, Clo
      * @throws Exception re-throws every exception
      */
     public void commit() throws Exception;
+
+    /**
+     * Implements {@link java.lang.Object#clone()}.
+     * The clone contains the current state of the values (see {@link #get(Object)}), including changes which were not committed yet.
+     * It has its own storage and its own instances of the values, so changes to one map or its values do not affect the other.
+     * Like the methods which need all values, it loads the values one at a time.
+     *
+     * @return a clone of this instance
+     * @throws CloneNotSupportedException if the instance could not be cloned, with the original exception as cause
+     */
+    public Object clone() throws CloneNotSupportedException;
 }
