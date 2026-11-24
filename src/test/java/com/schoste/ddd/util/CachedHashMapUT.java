@@ -44,6 +44,47 @@ abstract public class CachedHashMapUT
     }
 
     /**
+     * Gets the {@link com.schoste.ddd.util.CachedObject} which wraps the value of a key.
+     * Only applies to implementations which derive from {@link com.schoste.ddd.util.AbstractCachedHashMap};
+     * for others, the calling test is skipped.
+     *
+     * @param map the map
+     * @param key the key of the value
+     * @return the wrapped value
+     */
+    protected static CachedObject<?> cachedValueOf(CachedHashMap<?, ?> map, Object key)
+    {
+        Assume.assumeTrue(map instanceof AbstractCachedHashMap);
+
+        CachedObject<?> cachedValue = ((AbstractCachedHashMap<?, ?>) map).cachedValues.get(key);
+
+        Assert.assertNotNull(cachedValue);
+
+        return cachedValue;
+    }
+
+    /**
+     * Asserts that a {@link com.schoste.ddd.util.CachedObject} was closed: {@link com.schoste.ddd.util.CachedObject#get()}
+     * throws an {@link IllegalStateException}.
+     *
+     * @param cachedValue the wrapped value
+     * @throws Exception re-throws every other exception
+     */
+    protected static void assertClosed(CachedObject<?> cachedValue) throws Exception
+    {
+        try
+        {
+            cachedValue.get();
+
+            Assert.fail("the cached value was not closed");
+        }
+        catch (IllegalStateException expected)
+        {
+            // closed
+        }
+    }
+
+    /**
      * Asserts that a new map is empty
      *
      * @throws Exception re-throws every exception
@@ -209,6 +250,118 @@ abstract public class CachedHashMapUT
             Assert.assertTrue(testMap.isEmpty());
             Assert.assertNull(testMap.remove("key"));
         }
+    }
+
+    /**
+     * Asserts that {@link java.util.Map#remove(Object)} closes the removed value.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testRemoveClosesValue() throws Exception
+    {
+        try (CachedHashMap<String, ArrayList<String>> testMap = this.createCachedMap())
+        {
+            testMap.put("key", list("value"));
+
+            CachedObject<?> cachedValue = cachedValueOf(testMap, "key");
+
+            testMap.remove("key");
+
+            assertClosed(cachedValue);
+        }
+    }
+
+    /**
+     * Asserts that {@link java.util.Map#put(Object, Object)} for an existing key closes the previous value.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testPutClosesPreviousValue() throws Exception
+    {
+        try (CachedHashMap<String, ArrayList<String>> testMap = this.createCachedMap())
+        {
+            testMap.put("key", list("first"));
+
+            CachedObject<?> previousValue = cachedValueOf(testMap, "key");
+
+            testMap.put("key", list("second"));
+
+            assertClosed(previousValue);
+            Assert.assertEquals(list("second"), testMap.get("key"));
+        }
+    }
+
+    /**
+     * Asserts that removing entries through the views of the map (here {@link java.util.Collection#removeIf(java.util.function.Predicate)}
+     * of {@link java.util.Map#keySet()}, which uses the iterator) closes the removed values.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testRemoveThroughViewClosesValue() throws Exception
+    {
+        try (CachedHashMap<String, ArrayList<String>> testMap = this.createCachedMap())
+        {
+            testMap.put("one", list("1"));
+            testMap.put("two", list("2"));
+
+            CachedObject<?> removedValue = cachedValueOf(testMap, "one");
+
+            Assert.assertTrue(testMap.keySet().removeIf("one"::equals));
+
+            assertClosed(removedValue);
+            Assert.assertFalse(testMap.containsKey("one"));
+            Assert.assertEquals(list("2"), testMap.get("two"));
+        }
+    }
+
+    /**
+     * Asserts that {@link java.util.Map#clear()} closes all values and empties the map.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testClearClosesAllValues() throws Exception
+    {
+        try (CachedHashMap<String, ArrayList<String>> testMap = this.createCachedMap())
+        {
+            testMap.put("one", list("1"));
+            testMap.put("two", list("2"));
+
+            CachedObject<?> one = cachedValueOf(testMap, "one");
+            CachedObject<?> two = cachedValueOf(testMap, "two");
+
+            testMap.clear();
+
+            assertClosed(one);
+            assertClosed(two);
+            Assert.assertTrue(testMap.isEmpty());
+        }
+    }
+
+    /**
+     * Asserts that {@link com.schoste.ddd.util.CachedHashMap#close()} closes all values and empties the map.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testCloseClosesAllValues() throws Exception
+    {
+        CachedHashMap<String, ArrayList<String>> testMap = this.createCachedMap();
+
+        testMap.put("one", list("1"));
+        testMap.put("two", list("2"));
+
+        CachedObject<?> one = cachedValueOf(testMap, "one");
+        CachedObject<?> two = cachedValueOf(testMap, "two");
+
+        testMap.close();
+
+        assertClosed(one);
+        assertClosed(two);
+        Assert.assertTrue(testMap.isEmpty());
     }
 
     /**

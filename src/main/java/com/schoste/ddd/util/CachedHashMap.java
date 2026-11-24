@@ -16,6 +16,8 @@ import java.util.Map;
  *     or call {@link #commit()} to save all values in memory. Changes which were not saved are lost once the value was garbage collected.</li>
  * <li>Methods which return values (e.g. {@link #get(Object)}) are not guaranteed to return the instance which was put:
  *     once the value was garbage collected, they return a copy which was loaded from the storage.</li>
+ * <li>Removing a value, replacing it with {@link #put(Object, Object)}, {@link #clear()} and {@link #close()} free the storage of the affected values.
+ *     Close the map when it isn't needed anymore.</li>
  * <li>Null values are not supported, {@link #put(Object, Object)} throws a {@link NullPointerException} for them.</li>
  * <li>Methods of {@link java.util.Map} can't throw checked exceptions; if the storage fails,
  *     they throw an {@link IllegalStateException} with the original exception as cause.</li>

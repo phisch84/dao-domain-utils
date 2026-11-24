@@ -75,19 +75,86 @@ abstract public class AbstractCachedHashMap<K, V extends Serializable> extends A
     }
 
     /**
+     * Closes a {@link com.schoste.ddd.util.CachedObject}, which frees its storage.
+     *
+     * @param cachedValue the cached value, may be null
+     * @throws IllegalStateException if closing failed
+     */
+    protected static void close(CachedObject<?> cachedValue) throws IllegalStateException
+    {
+        if (cachedValue == null) return;
+
+        try
+        {
+            cachedValue.close();
+        }
+        catch (IOException e)
+        {
+            throw unchecked(e);
+        }
+    }
+
+    /**
+     * Gets the value of a {@link com.schoste.ddd.util.CachedObject} which was removed from the map, and closes it.
+     *
+     * @param cachedValue the removed cached value, may be null
+     * @return the value or null if cachedValue is null
+     * @throws IllegalStateException if the value could not be loaded or closing failed
+     */
+    protected V getValueAndClose(CachedObject<V> cachedValue) throws IllegalStateException
+    {
+        try
+        {
+            return this.getValue(cachedValue);
+        }
+        finally
+        {
+            close(cachedValue);
+        }
+    }
+
+    /**
+     * Closes all values and removes them from the map.
+     * Tries to close every value; if closing fails, the first exception is thrown with the others as suppressed exceptions.
+     *
+     * @throws IOException if closing a value failed
+     */
+    protected void closeAll() throws IOException
+    {
+        IOException failure = null;
+
+        for (CachedObject<V> cachedValue : this.cachedValues.values())
+        {
+            try
+            {
+                cachedValue.close();
+            }
+            catch (IOException e)
+            {
+                if (failure == null) failure = e;
+                else failure.addSuppressed(e);
+            }
+        }
+
+        this.cachedValues.clear();
+
+        if (failure != null) throw failure;
+    }
+
+    /**
      * Constructor for deriving classes.
      */
     protected AbstractCachedHashMap() { }
 
     /**
      * Wraps the value in a new {@link com.schoste.ddd.util.CachedObject}, saves it and adds it to the map.
-     * Call it again to save changes to the value.
+     * Call it again to save changes to the value. The previous value of the key is closed, which frees its storage.
      *
      * @param key the key of the value
      * @param value the value to add, must not be null
      * @return the previous value of the key (possibly a copy loaded from the storage), or null if there was none
      * @throws NullPointerException if value is null
-     * @throws IllegalStateException if the value could not be saved or the previous value could not be loaded
+     * @throws IllegalStateException if the value could not be saved, or the previous value could not be loaded or closed
      */
     @Override
     public V put(K key, V value) throws NullPointerException, IllegalStateException
@@ -100,7 +167,7 @@ abstract public class AbstractCachedHashMap<K, V extends Serializable> extends A
 
             cachedValue.commit();
 
-            return this.getValue(this.cachedValues.put(key, cachedValue));
+            return this.getValueAndClose(this.cachedValues.put(key, cachedValue));
         }
         catch (Exception e)
         {
@@ -122,14 +189,34 @@ abstract public class AbstractCachedHashMap<K, V extends Serializable> extends A
 
     /**
      * {@inheritDoc}
+     * The removed value is closed, which frees its storage.
      *
      * @return the removed value (possibly a copy loaded from the storage), or null if the key was not in the map
-     * @throws IllegalStateException if the value could not be loaded
+     * @throws IllegalStateException if the value could not be loaded or closed
      */
     @Override
     public V remove(Object key) throws IllegalStateException
     {
-        return this.getValue(this.cachedValues.remove(key));
+        return this.getValueAndClose(this.cachedValues.remove(key));
+    }
+
+    /**
+     * {@inheritDoc}
+     * All values are closed, which frees their storage.
+     *
+     * @throws IllegalStateException if closing a value failed
+     */
+    @Override
+    public void clear() throws IllegalStateException
+    {
+        try
+        {
+            this.closeAll();
+        }
+        catch (IOException e)
+        {
+            throw unchecked(e);
+        }
     }
 
     @Override
@@ -147,6 +234,7 @@ abstract public class AbstractCachedHashMap<K, V extends Serializable> extends A
     /**
      * Returns a view of the map's entries. A value is loaded only when {@link java.util.Map.Entry#getValue()} is called,
      * and the view does not keep a reference to it. {@link java.util.Map.Entry#setValue(Object)} saves the value like {@link #put(Object, Object)}.
+     * Removing entries through the view (or through {@link #keySet()} and {@link #values()}, which use it) closes the removed values.
      *
      * @return a view of the map's entries
      */
@@ -158,26 +246,32 @@ abstract public class AbstractCachedHashMap<K, V extends Serializable> extends A
             @Override
             public Iterator<Map.Entry<K, V>> iterator()
             {
-                Iterator<K> keys = AbstractCachedHashMap.this.cachedValues.keySet().iterator();
+                Iterator<Map.Entry<K, CachedObject<V>>> entries = AbstractCachedHashMap.this.cachedValues.entrySet().iterator();
 
                 return new Iterator<Map.Entry<K, V>>()
                 {
+                    // the entry of cachedValues returned last; it reflects a value replaced by setValue()
+                    private Map.Entry<K, CachedObject<V>> current;
+
                     @Override
                     public boolean hasNext()
                     {
-                        return keys.hasNext();
+                        return entries.hasNext();
                     }
 
                     @Override
                     public Map.Entry<K, V> next()
                     {
-                        return new LazyEntry(keys.next());
+                        this.current = entries.next();
+
+                        return new LazyEntry(this.current.getKey());
                     }
 
                     @Override
                     public void remove()
                     {
-                        keys.remove();
+                        entries.remove();
+                        close(this.current.getValue());
                     }
                 };
             }
@@ -255,11 +349,14 @@ abstract public class AbstractCachedHashMap<K, V extends Serializable> extends A
     }
 
     /**
-     * Closes the map.
+     * Closes all values, which frees their storage, and removes them from the map.
+     * Tries to close every value; if closing fails, the first exception is thrown with the others as suppressed exceptions.
      *
-     * @throws IOException re-throws every exception
+     * @throws IOException if closing a value failed
      */
-    // TODO: close the CachedObjects and delete their storage (step 5 of the CachedHashMap plan)
     @Override
-    public void close() throws IOException { }
+    public void close() throws IOException
+    {
+        this.closeAll();
+    }
 }
