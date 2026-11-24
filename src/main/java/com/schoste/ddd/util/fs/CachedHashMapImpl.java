@@ -8,12 +8,19 @@ import com.schoste.ddd.util.CachedObject;
 /**
  * Implementation of the {@link com.schoste.ddd.util.CachedHashMap} interface that uses {@link com.schoste.ddd.util.fs.CachedObjectImpl}
  * to cache the values: each value is stored in its own cache file.
+ * <p>
+ * A serialized map contains the keys, the storage path and the paths of the values' cache files (see {@link CachedObjectImpl}),
+ * but not the values. It can only be deserialized where the cache files exist, and while the original map didn't delete them.
+ * </p>
  *
  * @param <K> the class of the map's keys
  * @param <V> the class of the map's values inside of a {@link com.schoste.ddd.util.CachedObject}
  */
 public class CachedHashMapImpl<K, V extends Serializable> extends AbstractCachedHashMap<K, V>
 {
+    @SuppressWarnings("unused")
+    private static final long serialVersionUID = 42L;
+
     /**
      * The folder of the values' cache files.
      */

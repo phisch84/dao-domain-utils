@@ -1,5 +1,9 @@
 package com.schoste.ddd.util;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -61,6 +65,30 @@ abstract public class CachedHashMapUT
         Assert.assertNotNull(cachedValue);
 
         return cachedValue;
+    }
+
+    /**
+     * Serializes an object into a byte array and deserializes it again.
+     *
+     * @param <T> the class of the object
+     * @param obj the object to serialize
+     * @return the deserialized copy
+     * @throws Exception re-throws every exception
+     */
+    @SuppressWarnings("unchecked")
+    protected static <T> T serializeAndDeserialize(T obj) throws Exception
+    {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+
+        try (ObjectOutputStream oos = new ObjectOutputStream(bytes))
+        {
+            oos.writeObject(obj);
+        }
+
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray())))
+        {
+            return (T) ois.readObject();
+        }
     }
 
     /**
@@ -362,6 +390,39 @@ abstract public class CachedHashMapUT
         assertClosed(one);
         assertClosed(two);
         Assert.assertTrue(testMap.isEmpty());
+    }
+
+    /**
+     * Asserts that a map which was serialized and deserialized
+     * <ul>
+     * <li>is another instance,</li>
+     * <li>contains the same keys and equal values,</li>
+     * <li>including changes which were committed before serializing.</li>
+     * </ul>
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testSerializeAndDeserialize() throws Exception
+    {
+        try (CachedHashMap<String, ArrayList<String>> testMap = this.createCachedMap())
+        {
+            testMap.put("one", list("1"));
+            testMap.put("two", list("2"));
+
+            ArrayList<String> two = testMap.get("two");
+
+            two.add("2 committed");
+            testMap.commit();
+
+            CachedHashMap<String, ArrayList<String>> deserializedMap = serializeAndDeserialize(testMap);
+
+            Assert.assertNotNull(deserializedMap);
+            Assert.assertFalse(testMap == deserializedMap);
+            Assert.assertEquals(testMap.keySet(), deserializedMap.keySet());
+            Assert.assertEquals(list("1"), deserializedMap.get("one"));
+            Assert.assertEquals(list("2", "2 committed"), deserializedMap.get("two"));
+        }
     }
 
     /**

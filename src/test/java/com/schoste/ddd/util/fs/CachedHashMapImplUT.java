@@ -19,6 +19,30 @@ public class CachedHashMapImplUT extends CachedHashMapUT
         return new CachedHashMapImpl<String, ArrayList<String>>();
     }
 
+    /**
+     * Asserts that a deserialized map refers to the same cache files as the original one
+     * (only references to the cache files are serialized, not the values) and keeps the storage path.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testDeserializedMapSharesCacheFiles() throws Exception
+    {
+        try (CachedHashMapImpl<String, ArrayList<String>> testMap = new CachedHashMapImpl<>())
+        {
+            testMap.put("one", new ArrayList<>(Arrays.asList("1")));
+
+            CachedHashMapImpl<String, ArrayList<String>> deserializedMap = serializeAndDeserialize(testMap);
+
+            CachedObjectImpl<?> original = (CachedObjectImpl<?>) cachedValueOf(testMap, "one");
+            CachedObjectImpl<?> copy = (CachedObjectImpl<?>) cachedValueOf(deserializedMap, "one");
+
+            Assert.assertFalse(original == copy);
+            Assert.assertEquals(original.cacheFilePath, copy.cacheFilePath);
+            Assert.assertEquals(testMap.storagePath, deserializedMap.storagePath);
+        }
+    }
+
     private static int countFiles(File folder)
     {
         return folder.list().length;

@@ -27,8 +27,13 @@ import java.util.Set;
  */
 abstract public class AbstractCachedHashMap<K, V extends Serializable> extends AbstractMap<K, V> implements CachedHashMap<K, V>
 {
+    @SuppressWarnings("unused")
+    private static final long serialVersionUID = 42L;
+
     /**
      * The values of the map, each one wrapped in a {@link com.schoste.ddd.util.CachedObject}.
+     * Serialized as it is, so a serialized map contains the keys and the serialized {@link com.schoste.ddd.util.CachedObject}s,
+     * which refer to the storage of the values.
      */
     protected final HashMap<K, CachedObject<V>> cachedValues = new HashMap<>();
 

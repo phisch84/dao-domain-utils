@@ -19,6 +19,15 @@ import java.util.Map;
  * <li>Removing a value, replacing it with {@link #put(Object, Object)}, {@link #clear()} and {@link #close()} free the storage of the affected values.
  *     Close the map when it isn't needed anymore.</li>
  * <li>Null values are not supported, {@link #put(Object, Object)} throws a {@link NullPointerException} for them.</li>
+ * <li>The map is {@link java.io.Serializable}, but like {@link com.schoste.ddd.util.CachedObject} it serializes only references to the
+ *     storage of its values, not the values themselves (see the implementations for details). Therefore
+ *     <ul>
+ *     <li>call {@link #commit()} before serializing, because changes which were not saved are not included,</li>
+ *     <li>the deserialized map shares the storage with the original one: closing or removing values in one of them
+ *         frees the storage of the other one too,</li>
+ *     <li>the keys must be {@link java.io.Serializable}, otherwise serializing fails with a {@link java.io.NotSerializableException}.</li>
+ *     </ul>
+ * </li>
  * <li>Methods of {@link java.util.Map} can't throw checked exceptions; if the storage fails,
  *     they throw an {@link IllegalStateException} with the original exception as cause.</li>
  * </ul>
@@ -26,7 +35,7 @@ import java.util.Map;
  * @param <K> the class of the map's keys
  * @param <V> the class of the map's values inside of a {@link com.schoste.ddd.util.CachedObject}
  */
-public interface CachedHashMap<K, V extends Serializable> extends Map<K, V>, Cloneable, Closeable
+public interface CachedHashMap<K, V extends Serializable> extends Map<K, V>, Cloneable, Closeable, Serializable
 {
     /**
      * Saves all values which are in memory to the storage (see {@link com.schoste.ddd.util.CachedObject#commit()}).
