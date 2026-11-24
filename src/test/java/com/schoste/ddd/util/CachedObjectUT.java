@@ -1,5 +1,10 @@
 package com.schoste.ddd.util;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -109,6 +114,47 @@ abstract public class CachedObjectUT
             Assert.assertTrue(Integer.valueOf(1024).equals(actualObj));
             Assert.assertTrue(actualObj.equals(Integer.valueOf(1024)));
             Assert.assertFalse(actualObj == Integer.valueOf(1024));
+        }
+    }
+
+    /**
+     * Asserts that a {@link com.schoste.ddd.util.CachedObject} which was serialized and deserialized
+     * <ul>
+     * <li>has the same {@link com.schoste.ddd.util.CachedObject#hashCode()} as the original instance,</li>
+     * <li>is equal to the original instance (both ways),</li>
+     * <li>and {@link com.schoste.ddd.util.CachedObject#get()} returns an object equal to the cached one.</li>
+     * </ul>
+     *
+     * @throws Exception re-throws every exception
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testSerializeAndDeserialize() throws Exception
+    {
+        String objToCache = "testSerializeAndDeserialize";
+
+        try(CachedObject<String> testObj = this.createCachedObj(objToCache))
+        {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+
+            try (ObjectOutputStream oos = new ObjectOutputStream(bytes))
+            {
+                oos.writeObject(testObj);
+            }
+
+            CachedObject<String> deserializedObj;
+
+            try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray())))
+            {
+                deserializedObj = (CachedObject<String>) ois.readObject();
+            }
+
+            Assert.assertNotNull(deserializedObj);
+            Assert.assertFalse(testObj == deserializedObj);
+            Assert.assertEquals(testObj.hashCode(), deserializedObj.hashCode());
+            Assert.assertTrue(testObj.equals(deserializedObj));
+            Assert.assertTrue(deserializedObj.equals(testObj));
+            Assert.assertEquals(objToCache, deserializedObj.get());
         }
     }
 

@@ -24,12 +24,13 @@ import com.schoste.ddd.util.AbstractCachedObject;
 public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObject<T>
 {
     /**
-     * Only the path to the cache file is serialized, not the cached object itself.
+     * Only the path to the cache file and the hash code of the cached object are serialized, not the cached object itself.
      */
     @SuppressWarnings("unused")
     static private final ObjectStreamField[] serialPersistentFields =
     {
         new ObjectStreamField("cacheFilePath", String.class),
+        new ObjectStreamField("objHashCode", Integer.class),
     };
 
     static private String initializeCacheFileFolder(String storagePath) throws IllegalArgumentException, IllegalStateException, Exception
@@ -79,9 +80,10 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
     }
 
     /**
-     * Writes the path to the cache file.
+     * Writes the path to the cache file and the hash code of the cached object.
      *
      * @serialData the absolute path to the cache file ({@code cacheFilePath})
+     *             and the hash code of the cached object, obtained when the cached instance was created ({@code objHashCode})
      * @param out the stream to write to
      * @throws IOException if writing to the stream failed
      */
@@ -90,12 +92,15 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         ObjectOutputStream.PutField fields = out.putFields();
 
         fields.put("cacheFilePath", this.cacheFilePath);
+        fields.put("objHashCode", this.objHashCode);
     
         out.writeFields();
     }
 
     /**
-     * Reads the path to the cache file and loads the cached object from it.
+     * Reads the path to the cache file and the hash code of the cached object, and loads the cached object from the cache file.
+     * If the stream contains no hash code (it was written by a version which did not serialize it),
+     * the hash code of the loaded object is used.
      *
      * @param in the stream to read from
      * @throws IOException if reading from the stream failed
@@ -108,8 +113,13 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
 
         this.cacheFilePath = (String) fields.get("cacheFilePath", null);
         this.cacheFile = new File(this.cacheFilePath);
-        this.objRef = new WeakReference<T>(this.load());
+
+        T obj = this.load();
+        Integer hashCode = (Integer) fields.get("objHashCode", null);
+
+        this.objRef = new WeakReference<T>(obj);
         this.objRefLock = new Object();
+        this.objHashCode = (hashCode != null) ? hashCode : obj.hashCode();
     }
 
     /**
