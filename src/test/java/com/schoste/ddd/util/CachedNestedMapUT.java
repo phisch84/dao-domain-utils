@@ -270,4 +270,68 @@ abstract public class CachedNestedMapUT extends NestedMapUT
             Assert.assertEquals(list("kept"), map.get("x"));
         }
     }
+
+    /**
+     * Asserts that a clone contains changes which were not committed yet, holds its own instances,
+     * and keeps its state when the original values are garbage collected.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testCloneHasCurrentStateAndOwnInstances() throws Exception
+    {
+        try (CachedNestedMap<String, ArrayList<String>> map = this.createCachedNestedMap())
+        {
+            map.put("a", list("1"));
+            map.put("a", "b", "c", list("3"));
+
+            ArrayList<String> value = map.get("a", "b", "c");
+
+            value.add("uncommitted");
+
+            try (CachedNestedMap<String, ArrayList<String>> clone = (CachedNestedMap<String, ArrayList<String>>) map.clone())
+            {
+                Assert.assertEquals(list("3", "uncommitted"), clone.get("a", "b", "c"));
+                Assert.assertNotSame(value, clone.get("a", "b", "c"));
+
+                simulateGC(map);
+                simulateGC(clone);
+
+                Assert.assertEquals(list("3"), map.get("a", "b", "c"));
+                Assert.assertEquals(list("3", "uncommitted"), clone.get("a", "b", "c"));
+                Assert.assertEquals(list("1"), clone.get("a"));
+            }
+        }
+    }
+
+    /**
+     * Asserts that closing a clone frees only its own storage, not the one of the original map.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testCloseOfCloneKeepsOriginalStorage() throws Exception
+    {
+        try (CachedNestedMap<String, ArrayList<String>> map = this.createCachedNestedMap())
+        {
+            map.put("a", list("1"));
+            map.put("a", "b", list("2"));
+
+            CachedNestedMap<String, ArrayList<String>> clone = (CachedNestedMap<String, ArrayList<String>>) map.clone();
+            List<CachedObject<?>> cloneValues = cachedValuesOf(clone);
+
+            clone.close();
+
+            for (CachedObject<?> cachedValue : cloneValues)
+            {
+                CachedHashMapUT.assertClosed(cachedValue);
+            }
+            simulateGC(map);
+
+            Assert.assertEquals(list("1"), map.get("a"));
+            Assert.assertEquals(list("2"), map.get("a", "b"));
+        }
+    }
 }

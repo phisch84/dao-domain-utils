@@ -1,5 +1,6 @@
 package com.schoste.ddd.util;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -21,19 +22,28 @@ import java.util.Set;
  * <p>A sub map ({@link #getSubMap(Object...)}) is an instance of this class which shares the levels of the map it
  * was created from and prefixes every key path with its own path.</p>
  *
+ * <p>Serialization writes the levels with their value maps as they are, so what is written for the values is
+ * decided by the value maps (e.g. {@link com.schoste.ddd.util.fs.CachedHashMapImpl} writes only references to its
+ * cache files). {@link #clone()} copies every level and every value map with {@link #cloneValueMap(Map)}.</p>
+ *
  * @param <K> the class of the keys on every level
  * @param <V> the class of the values
  */
 abstract public class AbstractNestedMap<K, V> implements NestedMap<K, V>
 {
+    @SuppressWarnings("unused")
+    private static final long serialVersionUID = 42L;
+
     /**
      * One level of the map: the values of its keys and the deeper levels of its keys.
      *
      * @param <K> the class of the keys
      * @param <V> the class of the values
      */
-    private static final class Level<K, V>
+    private static final class Level<K, V> implements Serializable
     {
+        private static final long serialVersionUID = 42L;
+
         /** The values of this level; null while the level has no values. */
         private Map<K, V> values;
 
@@ -59,6 +69,8 @@ abstract public class AbstractNestedMap<K, V> implements NestedMap<K, V>
      */
     private static final class SubMap<K, V> extends AbstractNestedMap<K, V>
     {
+        private static final long serialVersionUID = 42L;
+
         private SubMap(AbstractNestedMap<K, V> owner, List<K> path)
         {
             super(owner, path);
@@ -71,14 +83,20 @@ abstract public class AbstractNestedMap<K, V> implements NestedMap<K, V>
         }
     }
 
-    /** The map which holds the levels: this map itself, or for a sub map the map it was created from. */
-    private final AbstractNestedMap<K, V> owner;
+    /**
+     * The map which holds the levels: this map itself, or for a sub map the map it was created from.
+     * Not final only because {@link #clone()} replaces it.
+     */
+    private AbstractNestedMap<K, V> owner;
 
     /** The key path of this (sub) map; empty for the map itself. */
     private final List<K> path;
 
-    /** The first level; only used by the owner. */
-    private final Level<K, V> root;
+    /**
+     * The first level; only used by the owner, null for a sub map.
+     * Not final only because {@link #clone()} replaces it.
+     */
+    private Level<K, V> root;
 
     /**
      * Constructor for deriving classes.
@@ -443,5 +461,89 @@ abstract public class AbstractNestedMap<K, V> implements NestedMap<K, V>
         }
         clear(levels.get(levels.size() - 1));
         prune(levels, this.path);
+    }
+
+    /**
+     * Copies the map which holds the values of one level, for {@link #clone()}. This implementation creates a map
+     * with {@link #createValueMap()} and puts all keys and values into it, so the clone shares the value instances
+     * (like {@link java.util.HashMap#clone()}). Deriving classes whose value maps have a storage override it.
+     *
+     * @param valueMap the map of the level to copy
+     * @return the copy for the clone
+     * @throws CloneNotSupportedException if the map could not be copied
+     */
+    protected Map<K, V> cloneValueMap(Map<K, V> valueMap) throws CloneNotSupportedException
+    {
+        Map<K, V> copy = this.createValueMap();
+
+        copy.putAll(valueMap);
+
+        return copy;
+    }
+
+    /**
+     * Copies the values and deeper levels of a level into an empty level of the clone. A deeper level is added to the
+     * clone before it is filled, so that the clone can free everything it copied if copying fails.
+     */
+    private void copyLevel(Level<K, V> from, Level<K, V> to) throws CloneNotSupportedException
+    {
+        if (from.values != null)
+        {
+            to.values = this.cloneValueMap(from.values);
+        }
+        for (Map.Entry<K, Level<K, V>> child : from.children.entrySet())
+        {
+            Level<K, V> childCopy = new Level<K, V>();
+
+            to.children.put(child.getKey(), childCopy);
+            this.copyLevel(child.getValue(), childCopy);
+        }
+    }
+
+    /**
+     * Clones the map: {@code super.clone()} copies all fields (also of deriving classes), then every level and every
+     * value map is copied with {@link #cloneValueMap(Map)}. If copying fails, everything which was already copied is
+     * cleared (which frees its storage).
+     *
+     * @return a clone of this map
+     * @throws CloneNotSupportedException if this is a sub map, or if a value map could not be copied
+     *         (with the original exception as cause, if it was another exception)
+     */
+    @Override
+    public Object clone() throws CloneNotSupportedException
+    {
+        if (this.owner != this)
+        {
+            throw new CloneNotSupportedException("A sub map can't be cloned; clone the map instead");
+        }
+
+        @SuppressWarnings("unchecked")
+        AbstractNestedMap<K, V> clone = (AbstractNestedMap<K, V>) super.clone();
+
+        clone.owner = clone;
+        clone.root = new Level<K, V>();
+
+        try
+        {
+            this.copyLevel(this.root, clone.root);
+        }
+        catch (CloneNotSupportedException | RuntimeException e)
+        {
+            try
+            {
+                clear(clone.root);
+            }
+            catch (RuntimeException suppressed)
+            {
+                e.addSuppressed(suppressed);
+            }
+            if (e instanceof CloneNotSupportedException) throw (CloneNotSupportedException) e;
+
+            CloneNotSupportedException cnse = new CloneNotSupportedException(e.getMessage());
+
+            cnse.initCause(e);
+            throw cnse;
+        }
+        return clone;
     }
 }

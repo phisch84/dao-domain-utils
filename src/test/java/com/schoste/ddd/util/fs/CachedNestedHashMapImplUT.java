@@ -94,4 +94,72 @@ public class CachedNestedHashMapImplUT extends CachedNestedMapUT
             storage.delete();
         }
     }
+
+    /**
+     * Asserts that a deserialized map keeps the storage path and shares the cache files with the original one:
+     * serializing creates no files, and closing the copy deletes the files of both.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testDeserializedMapSharesCacheFiles() throws Exception
+    {
+        File storage = Files.createTempDirectory(CachedNestedHashMapImplUT.class.getSimpleName()).toFile();
+
+        try (CachedNestedHashMapImpl<String, String> map = new CachedNestedHashMapImpl<>(storage.getAbsolutePath()))
+        {
+            map.put("a", "v1");
+            map.put("a", "b", "v2");
+
+            CachedNestedHashMapImpl<String, String> copy = serializeAndDeserialize(map);
+
+            Assert.assertEquals(map.storagePath, copy.storagePath);
+            Assert.assertEquals(2, countFiles(storage));
+
+            copy.close();
+
+            Assert.assertEquals(0, countFiles(storage));
+        }
+        finally
+        {
+            for (File file : storage.listFiles()) file.delete();
+
+            storage.delete();
+        }
+    }
+
+    /**
+     * Asserts that a clone stores its values in own cache files in the same storage path,
+     * and that closing the clone deletes only its own cache files.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testCloneHasOwnCacheFiles() throws Exception
+    {
+        File storage = Files.createTempDirectory(CachedNestedHashMapImplUT.class.getSimpleName()).toFile();
+
+        try (CachedNestedHashMapImpl<String, String> map = new CachedNestedHashMapImpl<>(storage.getAbsolutePath()))
+        {
+            map.put("a", "v1");
+            map.put("a", "b", "v2");
+            map.put("x", "y", "z", "v3");
+
+            CachedNestedHashMapImpl<String, String> clone = (CachedNestedHashMapImpl<String, String>) map.clone();
+
+            Assert.assertEquals(map.storagePath, clone.storagePath);
+            Assert.assertEquals(6, countFiles(storage));
+
+            clone.close();
+
+            Assert.assertEquals(3, countFiles(storage));
+        }
+        finally
+        {
+            for (File file : storage.listFiles()) file.delete();
+
+            storage.delete();
+        }
+    }
 }

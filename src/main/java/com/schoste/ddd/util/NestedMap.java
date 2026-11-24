@@ -1,5 +1,6 @@
 package com.schoste.ddd.util;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.Set;
 
@@ -32,12 +33,16 @@ import java.util.Set;
  *     "no value at this path". Null keys are allowed.</li>
  * <li>A key path for a value has at least one key; an empty path throws {@link IllegalArgumentException}.</li>
  * <li>NestedMap is not a {@link java.util.Map}, because a path has several keys.</li>
+ * <li>The map is {@link java.io.Serializable} and can be cloned with {@link #clone()}. Like {@link java.util.HashMap}, the
+ *     keys and values must be {@link java.io.Serializable} for serializing, otherwise it fails with a
+ *     {@link java.io.NotSerializableException}. A serialized sub map ({@link #getSubMap(Object...)}) includes the whole
+ *     map it is a view of. A sub map can't be cloned; clone the map instead.</li>
  * </ul>
  *
  * @param <K> the class of the keys on every level
  * @param <V> the class of the values
  */
-public interface NestedMap<K, V>
+public interface NestedMap<K, V> extends Cloneable, Serializable
 {
     /**
      * Stores a value at a key path of one key.
@@ -183,4 +188,15 @@ public interface NestedMap<K, V>
      * only the levels below its path are removed; the value at the path itself stays.
      */
     void clear();
+
+    /**
+     * Implements {@link java.lang.Object#clone()}: the clone has all key paths and values of this map, and its own
+     * levels, so adding or removing paths in one map doesn't affect the other. Whether the values themselves are
+     * copied depends on the implementation (see there).
+     *
+     * @return a clone of this map
+     * @throws CloneNotSupportedException if this is a sub map (see {@link #getSubMap(Object...)}), or if the map
+     *         could not be cloned, with the original exception as cause
+     */
+    Object clone() throws CloneNotSupportedException;
 }

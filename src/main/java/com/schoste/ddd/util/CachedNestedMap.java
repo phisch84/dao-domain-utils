@@ -21,6 +21,12 @@ import java.io.Serializable;
  * <li>{@link #getSubMap(Object...)} returns a {@link com.schoste.ddd.util.NestedMap} view without {@link #commit()}
  *     and {@link #close()}: these two always act on the whole map. {@code clear()} of a sub map frees the storage of
  *     its values.</li>
+ * <li>{@link #clone()} works like {@link com.schoste.ddd.util.CachedHashMap#clone()}: the clone contains the current
+ *     state of the values, including changes which were not committed yet, and has its own storage and instances.</li>
+ * <li>Like {@link com.schoste.ddd.util.CachedHashMap}, the map serializes only references to the storage of its
+ *     values, not the values themselves. Call {@link #commit()} before serializing; the deserialized map shares the
+ *     storage with the original one, so closing or removing values in one of them frees the storage of the other
+ *     one too.</li>
  * <li>Methods of {@link com.schoste.ddd.util.NestedMap} can't throw checked exceptions; if the storage fails,
  *     they throw an {@link IllegalStateException} with the original exception as cause.</li>
  * </ul>

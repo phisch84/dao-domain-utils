@@ -11,12 +11,20 @@ import com.schoste.ddd.util.CachedNestedMap;
  * Implementation of {@link com.schoste.ddd.util.CachedNestedMap} which caches the values in the file system:
  * each level which has values uses a {@link com.schoste.ddd.util.fs.CachedHashMapImpl}, so each value is stored in
  * its own cache file in the storage path.
+ * <p>
+ * A serialized map contains the keys, the storage path and the paths of the values' cache files (see
+ * {@link com.schoste.ddd.util.fs.CachedHashMapImpl}), but not the values. It can only be deserialized where the cache
+ * files exist, and while the original map didn't delete them.
+ * </p>
  *
  * @param <K> the class of the keys on every level
  * @param <V> the class of the values
  */
 public class CachedNestedHashMapImpl<K, V extends Serializable> extends AbstractNestedMap<K, V> implements CachedNestedMap<K, V>
 {
+    @SuppressWarnings("unused")
+    private static final long serialVersionUID = 42L;
+
     /**
      * The folder of the values' cache files.
      */
@@ -52,6 +60,22 @@ public class CachedNestedHashMapImpl<K, V extends Serializable> extends Abstract
     protected Map<K, V> createValueMap()
     {
         return new CachedHashMapImpl<K, V>(this.storagePath);
+    }
+
+    /**
+     * Clones the {@link com.schoste.ddd.util.fs.CachedHashMapImpl} of a level (see
+     * {@link com.schoste.ddd.util.CachedHashMap#clone()}), so the clone has its own cache files and instances
+     * with the current state of the values.
+     *
+     * @param valueMap the map of the level to copy
+     * @return the clone of the map
+     * @throws CloneNotSupportedException if the map could not be cloned
+     */
+    @SuppressWarnings("unchecked")
+    @Override
+    protected Map<K, V> cloneValueMap(Map<K, V> valueMap) throws CloneNotSupportedException
+    {
+        return (Map<K, V>) ((CachedHashMapImpl<K, V>) valueMap).clone();
     }
 
     /**

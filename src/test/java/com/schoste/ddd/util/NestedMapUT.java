@@ -580,4 +580,155 @@ abstract public class NestedMapUT
         Assert.assertEquals(set("x"), map.keySet());
         Assert.assertEquals(1, map.size());
     }
+
+    /**
+     * Serializes and deserializes an object (see {@link com.schoste.ddd.util.CachedHashMapUT#serializeAndDeserialize(Object)}).
+     *
+     * @param <T> the class of the object
+     * @param obj the object
+     * @return the deserialized copy
+     * @throws Exception re-throws every exception
+     */
+    protected static <T> T serializeAndDeserialize(T obj) throws Exception
+    {
+        return CachedHashMapUT.serializeAndDeserialize(obj);
+    }
+
+    /**
+     * Asserts that a deserialized map has all key paths and values, and can be changed.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testSerializeAndDeserialize() throws Exception
+    {
+        NestedMap<String, String> map = this.createNestedMap();
+
+        map.put("a", "v1");
+        map.put("a", "b", "c", "v2");
+        map.put("x", "y", "v3");
+
+        NestedMap<String, String> copy = serializeAndDeserialize(map);
+
+        Assert.assertNotSame(map, copy);
+        Assert.assertEquals("v1", copy.get("a"));
+        Assert.assertEquals("v2", copy.get("a", "b", "c"));
+        Assert.assertEquals("v3", copy.get("x", "y"));
+        Assert.assertEquals(set("a", "x"), copy.keySet());
+        Assert.assertEquals(3, copy.size());
+
+        copy.put("n", "e", "w", "v4");
+        copy.getSubMap("a").put("d", "v5");
+
+        Assert.assertEquals("v4", copy.get("n", "e", "w"));
+        Assert.assertEquals("v5", copy.get("a", "d"));
+        Assert.assertFalse(map.containsKey("n", "e", "w"));
+    }
+
+    /**
+     * Asserts that a deserialized sub map is still a view of its path.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testSerializeSubMap() throws Exception
+    {
+        NestedMap<String, String> map = this.createNestedMap();
+
+        map.put("a", "b", "v1");
+
+        NestedMap<String, String> sub = serializeAndDeserialize(map.getSubMap("a"));
+
+        Assert.assertEquals("v1", sub.get("b"));
+        Assert.assertEquals(set("b"), sub.keySet());
+
+        sub.put("c", "v2");
+
+        Assert.assertEquals("v2", sub.get("c"));
+        Assert.assertNull(map.get("a", "c"));
+    }
+
+    /**
+     * Asserts that a clone has all key paths and values, and that adding, replacing and removing in one map
+     * doesn't affect the other.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testClone() throws Exception
+    {
+        NestedMap<String, String> map = this.createNestedMap();
+
+        map.put("a", "v1");
+        map.put("a", "b", "c", "v2");
+        map.put("x", "y", "v3");
+
+        NestedMap<String, String> clone = (NestedMap<String, String>) map.clone();
+
+        Assert.assertNotSame(map, clone);
+        Assert.assertSame(map.getClass(), clone.getClass());
+        Assert.assertEquals("v1", clone.get("a"));
+        Assert.assertEquals("v2", clone.get("a", "b", "c"));
+        Assert.assertEquals("v3", clone.get("x", "y"));
+        Assert.assertEquals(3, clone.size());
+
+        clone.put("a", "b", "c", "replaced");
+        clone.remove("x", "y");
+        clone.put("n", "v4");
+        map.put("a", "b", "d", "v5");
+
+        Assert.assertEquals("v2", map.get("a", "b", "c"));
+        Assert.assertEquals("v3", map.get("x", "y"));
+        Assert.assertFalse(map.containsKey("n"));
+        Assert.assertEquals(set("a", "x"), map.keySet());
+        Assert.assertEquals("replaced", clone.get("a", "b", "c"));
+        Assert.assertFalse(clone.containsKey("a", "b", "d"));
+        Assert.assertEquals(set("a", "n"), clone.keySet());
+    }
+
+    /**
+     * Asserts that the sub maps of a clone are views of the clone, not of the original map.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testSubMapOfCloneIsViewOfClone() throws Exception
+    {
+        NestedMap<String, String> map = this.createNestedMap();
+
+        map.put("a", "b", "v1");
+
+        NestedMap<String, String> clone = (NestedMap<String, String>) map.clone();
+
+        clone.getSubMap("a").put("c", "v2");
+
+        Assert.assertEquals("v2", clone.get("a", "c"));
+        Assert.assertNull(map.get("a", "c"));
+    }
+
+    /**
+     * Asserts that cloning a sub map is rejected with a {@link CloneNotSupportedException} without a cause,
+     * i.e. deliberately and not because cloning failed.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testCloneOfSubMapIsRejected() throws Exception
+    {
+        NestedMap<String, String> map = this.createNestedMap();
+
+        map.put("a", "b", "v");
+
+        try
+        {
+            map.getSubMap("a").clone();
+            Assert.fail("CloneNotSupportedException expected");
+        }
+        catch (CloneNotSupportedException e)
+        {
+            Assert.assertNull(e.getCause());
+        }
+    }
 }
