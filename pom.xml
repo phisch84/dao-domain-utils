@@ -45,7 +45,7 @@
                     </configuration>
                 </plugin>
 
-                <!-- Every module also provides its test classes (e.g. the in-memory DAO and the DAO contract tests) as test-jar -->
+                <!-- Also provides the test classes (e.g. the CachedObject contract tests) as test-jar -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-jar-plugin</artifactId>
@@ -87,8 +87,8 @@
         <plugins>
             <!--
             Consumers of the library have no access to its source code, so the Javadoc is the documentation of its contract.
-            Every module publishes a Javadoc jar for its classes and one for its test classes
-            (the in-memory DAO and the DAO contract tests are meant to be used by consumers and implementers).
+            The library publishes a Javadoc jar for its classes and one for its test classes
+            (the CachedObject contract tests are meant to be used by implementers of further CachedObject implementations).
             doclint checks the Javadoc, and every finding fails the build:
             for the classes, broken HTML, broken references and missing documentation;
             for the test classes, everything except missing documentation (JUnit test classes need no comment for every element).
@@ -129,7 +129,7 @@
         <repository>
             <id>github</id>
             <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/phisch84/dao</url>
+            <url>https://maven.pkg.github.com/phisch84/dao-domain-utils</url>
         </repository>
     </distributionManagement>
 </project>
