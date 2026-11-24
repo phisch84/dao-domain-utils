@@ -12,13 +12,16 @@ import java.lang.ref.WeakReference;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.schoste.ddd.util.AbstractCachedObject;
 
 /**
  * Implements {@link com.schoste.ddd.util.AbstractCachedObject}.
- * The objects are cached by serializing them into a temporary file on the file system, which is supposed to be deleted on exit (see {@link File#deleteOnExit()})
- * 
+ * The objects are cached by serializing them into a temporary file on the file system.
+ * The file is deleted by {@link #close()}, or when the JVM exits if the instance was not closed.
+ *
  * @param <T> the class of the object to cache
  */
 public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObject<T>
@@ -32,6 +35,31 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         new ObjectStreamField("cacheFilePath", String.class),
         new ObjectStreamField("objHashCode", Integer.class),
     };
+
+    /**
+     * Absolute paths of the cache files created by this JVM which were not closed yet.
+     * A shutdown hook deletes them when the JVM exits.
+     * Unlike with {@link File#deleteOnExit()}, {@link #close()} removes the path again,
+     * so the set does not grow with every instance ever created.
+     */
+    static final Set<String> cacheFilesToDeleteOnExit = ConcurrentHashMap.newKeySet();
+
+    static
+    {
+        Thread deleteCacheFiles = new Thread(() ->
+        {
+            for (String cacheFilePath : cacheFilesToDeleteOnExit) new File(cacheFilePath).delete();
+        }, CachedObjectImpl.class.getSimpleName() + "-deleteCacheFiles");
+
+        try
+        {
+            Runtime.getRuntime().addShutdownHook(deleteCacheFiles);
+        }
+        catch (IllegalStateException e)
+        {
+            // the JVM is already shutting down; File#deleteOnExit() would silently ignore this as well
+        }
+    }
 
     static private String initializeCacheFileFolder(String storagePath) throws IllegalArgumentException, IllegalStateException, Exception
     {
@@ -64,7 +92,8 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         while (Files.exists(Paths.get(storagePath.toString(), Long.toString(cacheFileName)))) cacheFileName++;
 
         File cacheFile = Paths.get(storagePath.toString(), String.valueOf(cacheFileName)).toFile();
-             cacheFile.deleteOnExit();
+
+        cacheFilesToDeleteOnExit.add(cacheFile.getAbsolutePath());
 
 		try (FileOutputStream fos = new FileOutputStream(cacheFile);
 			 ObjectOutputStream oos = new ObjectOutputStream(fos))
@@ -228,6 +257,8 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         {
             this.objRef = null;
             this.cacheFile.delete();
+
+            cacheFilesToDeleteOnExit.remove(this.cacheFilePath);
         }
     }
 
