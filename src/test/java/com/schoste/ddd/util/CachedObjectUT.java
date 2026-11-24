@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -88,36 +89,35 @@ abstract public class CachedObjectUT
     /**
      * Asserts that {@link com.schoste.ddd.util.AbstractCachedObject#get()} gets an equal object
      * after {@link com.schoste.ddd.util.AbstractCachedObject#commit()} and after the GC ran.
-     * 
+     * <p>
+     * The test keeps a {@link WeakReference} to the cached object and runs the GC until it is cleared,
+     * which proves that the object was collected and that {@link com.schoste.ddd.util.CachedObject#get()}
+     * must load it from the storage. Since a change was committed before, the loaded object must contain it.
+     * </p>
+     *
      * @throws Exception re-throws every exception
      */
-    @Test 
+    @Test
     public void testGetAfterCommitAndAfterGC() throws Exception
     {
-        Integer expectedObj = Integer.valueOf(1024);
+        ArrayList<String> expectedObj = new ArrayList<>(Arrays.asList("created"));
 
-        try(CachedObject<Integer> testObj = this.createCachedObj(expectedObj))
+        try(CachedObject<ArrayList<String>> testObj = this.createCachedObj(expectedObj))
         {
+            expectedObj.add("committed");
             testObj.commit();
+
+            WeakReference<ArrayList<String>> collected = new WeakReference<>(expectedObj);
 
             expectedObj = null;
 
-            for (int i=0; i<100; i++)
-            {
-                int[] buffer = new int[1024];
+            for (int i=0; (i<100) && (collected.get() != null); i++) System.gc();
 
-                buffer[0] = 0;
-                buffer = null;
+            Assert.assertNull("the GC did not collect the cached object", collected.get());
 
-                System.gc();
-            }
+            ArrayList<String> actualObj = testObj.get();
 
-            Integer actualObj = testObj.get();
-
-            Assert.assertNotNull(actualObj);
-            Assert.assertTrue(Integer.valueOf(1024).equals(actualObj));
-            Assert.assertTrue(actualObj.equals(Integer.valueOf(1024)));
-            Assert.assertFalse(actualObj == Integer.valueOf(1024));
+            Assert.assertEquals(Arrays.asList("created", "committed"), actualObj);
         }
     }
 
