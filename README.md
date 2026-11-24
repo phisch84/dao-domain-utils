@@ -6,6 +6,13 @@ code that belongs to none of the infrastructure, domain or application layers.
 
 Requires Java 8 or newer. No runtime dependencies.
 
+| Class | What it does |
+|---|---|
+| [`CachedObject<T>`](#cachedobject) | Holds one `Serializable` object, keeps it in memory only weakly and reloads it from a storage on demand |
+| [`CachedHashMap<K, V>`](#cachedhashmap) | A `java.util.Map` whose values are each kept in a `CachedObject`, so large maps don't fill the heap |
+
+Both come with a file system implementation in the package `com.schoste.ddd.util.fs`.
+
 ## CachedObject
 
 `CachedObject<T>` holds a `Serializable` object without keeping it in memory all the time.
@@ -45,6 +52,57 @@ try (CachedObject<ArrayList<String>> cached = new CachedObjectImpl<>(new ArrayLi
 - **Serializing a `CachedObjectImpl` writes only the path of the cache file**, not the object itself.
   It can only be deserialized where that file exists and while it was not closed.
 
+## CachedHashMap
+
+`CachedHashMap<K, V>` is a `java.util.Map` for many or large values. The keys stay in memory;
+each value is stored in its own `CachedObject`, so the garbage collector may reclaim values that aren't in use,
+and the map loads them again when they are needed.
+
+`fs.CachedHashMapImpl` stores each value in its own cache file in `java.io.tmpdir` or in a folder you choose.
+
+```java
+import com.schoste.ddd.util.CachedHashMap;
+import com.schoste.ddd.util.fs.CachedHashMapImpl;
+
+try (CachedHashMap<String, ArrayList<String>> map = new CachedHashMapImpl<>("/var/cache/my-app"))
+{
+    map.put("a", new ArrayList<>(Arrays.asList("1")));  // put() saves the value
+
+    ArrayList<String> a = map.get("a");
+
+    a.add("2");
+    map.put("a", a);      // save a changed value by putting it again ...
+    map.commit();         // ... or save all values which are in memory
+
+    for (ArrayList<String> value : map.values())
+    {
+        // values are loaded one at a time; the GC can reclaim each one after use
+    }
+}                         // close() deletes all cache files
+```
+
+### Rules
+
+- **Save changes**: `put()` saves a value. Save a changed value with `put()` again, or all values in memory
+  with `commit()`, while you still hold a reference to them. Changes that weren't saved are lost
+  once the value is garbage collected.
+- **Values may be copies**: `get()`, `values()` and the entries may return a copy loaded from the storage,
+  not the instance you put.
+- **No `null` values**: `put(key, null)` throws a `NullPointerException`. `null` keys are allowed.
+- **Methods that need all values are slow, not memory hungry**: `values()`, `containsValue()`, `equals()`,
+  `hashCode()`, `toString()` and iterating or streaming `values()`/`entrySet()` load the values one at a time
+  and keep no references. Each call reads all values from the storage, though.
+  `size()`, `containsKey()` and `keySet()` don't load any value.
+- **Removing frees storage**: `remove()`, replacing a value with `put()`, `clear()` and `close()` delete the
+  cache files of the affected values. Close the map when you don't need it anymore.
+- **Storage errors** are thrown as `IllegalStateException` with the original exception as cause,
+  because the methods of `Map` can't throw checked exceptions.
+- **`clone()` copies the current state**, including changes that weren't saved, into its own cache files.
+  Changes to the clone don't affect the original, and the other way round.
+- **Serializing writes only references**: the keys, the storage path and the paths of the cache files, not the values.
+  Call `commit()` before serializing. The deserialized map shares the cache files with the original,
+  so closing or removing values in one of them affects the other one too. The keys must be `Serializable`.
+
 ## Installation
 
 The library is published to GitHub Packages. Add the repository and the dependency to your `pom.xml`:
@@ -80,19 +138,27 @@ with the `read:packages` scope:
 </servers>
 ```
 
-## Implementing another CachedObject
+## Implementing another storage
 
-Derive from `AbstractCachedObject` and implement `save()`, `load()`, `clone()`, `equals()` and `close()`.
-The test-jar (`<classifier>tests</classifier>`) contains the abstract contract test `CachedObjectUT`:
-derive your test class from it to check that your implementation behaves like the others.
+To store data somewhere else than in files (e.g. a database), implement the abstract classes:
+
+| Type | Derive from | Implement |
+|---|---|---|
+| `CachedObject` | `AbstractCachedObject` | `save()`, `load()`, `clone()`, `equals()`, `close()` |
+| `CachedHashMap` | `AbstractCachedHashMap` | `createCachedObject(V)`, which wraps a value in your `CachedObject` |
+
+The test-jar (`<classifier>tests</classifier>`) contains the abstract contract tests `CachedObjectUT` and
+`CachedHashMapUT`: derive your test classes from them and implement their factory methods to check that your
+implementation behaves like the others.
 
 ## Building
 
 ```sh
-mvn verify
+mvn clean verify
 ```
 
 This runs the tests and the strict Javadoc check, which fails the build on any finding.
+Contributor and AI-assistant notes (architecture, design decisions, conventions) are in [CLAUDE.md](CLAUDE.md).
 
 ## License
 

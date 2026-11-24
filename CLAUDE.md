@@ -2,38 +2,64 @@
 
 Helper library for the DDD libraries [dao](https://github.com/phisch84/dao) and
 [domain-repository](https://github.com/phisch84/domain-repository): code that fits none of the
-infrastructure, domain or application layers. Currently it provides `CachedObject<T>`, a holder
-that keeps a `Serializable` object only weakly in memory and reloads it from storage on demand.
+infrastructure, domain or application layers. It provides memory-saving holders whose data lives in a
+storage and is kept in memory only weakly:
 
-## Build and verify
+- `CachedObject<T>`: one `Serializable` object, reloaded from storage on demand.
+- `CachedHashMap<K, V>`: a `java.util.Map` whose keys stay in memory and whose values are each a `CachedObject`.
 
-- Always check changes with `mvn -B verify`, not just `mvn test`: only `verify` runs the Javadoc
-  check, which fails the build on any finding.
-- The code must compile against **Java 8** (`maven.compiler.release=8`), even though newer JDKs build it.
-  No `var`, records, `List.of`, text blocks, etc.
-- Formatting follows `.editorconfig`: UTF-8, LF line endings (enforced by `.gitattributes`), 4 spaces,
-  no tabs, no trailing whitespace, final newline.
+User-facing documentation is in `README.md`; the contract of each class is its Javadoc.
 
-## Javadoc rules (doclint, `failOnWarnings`)
+## Commands
 
-- Every public/protected class, constructor, field and method needs a complete comment
-  (`@param`, `@return`, `@throws`). Write explicit constructors instead of relying on the default one.
-- The private serialization members (`serialPersistentFields`, `writeObject`, `readObject`) need comments too;
-  they appear on the "Serialized Form" page.
-- `{@see ...}` is not an inline tag; use `{@link ...}`. Field references use `#`: `{@link System#err}`.
-- Test classes are checked as well, except for missing comments.
+| Purpose | Command |
+|---|---|
+| Definition of done (tests + strict Javadoc) | `mvn -B clean verify` |
+| One test class | `mvn -B test -Dtest=CachedHashMapImplUT` |
+| Some test methods | `mvn -B test -Dtest='CachedHashMapImplUT#testClone*'` |
 
-## Tests
+- Use `verify`, not just `test`: only `verify` runs the Javadoc check, which fails the build on any finding.
+- Use `clean` when results look odd: the IDE (VS Code Java / Eclipse compiler) also compiles into `target/`,
+  and Maven then runs stale classes ("Unresolved compilation problem").
+- CI (`.github/workflows/build.yml`) runs `mvn -B verify` on JDK 21 and 25 for every push and pull request.
 
-- Test classes are named `*UT` (Surefire is configured to include `**/*UT.java`).
-- `CachedObjectUT` is the abstract **contract test** every `CachedObject` implementation must pass.
-  Add shared behaviour there; each implementation has a small subclass (e.g. `fs/CachedObjectImplUT`)
-  that implements the `createCachedObj(...)` factories and holds implementation-specific tests.
-- The test classes ship as a test-jar so other implementations can reuse the contract test.
-- Don't rely on GC timing: either simulate collection (`objRef.clear()`, accessible from package
-  `com.schoste.ddd.util`) or wait on your own `WeakReference` and assert that it was cleared.
+## Code map
+
+| File | Role |
+|---|---|
+| `src/main/java/com/schoste/ddd/util/CachedObject.java` | Interface + usage rules of a cached object |
+| `src/main/java/com/schoste/ddd/util/AbstractCachedObject.java` | Weak reference, locking, `get()`/`commit()`; subclasses implement `save()`/`load()` |
+| `src/main/java/com/schoste/ddd/util/fs/CachedObjectImpl.java` | File system storage: one cache file per object |
+| `src/main/java/com/schoste/ddd/util/CachedHashMap.java` | Interface + usage rules of the map, adds `commit()` and `clone()` |
+| `src/main/java/com/schoste/ddd/util/AbstractCachedHashMap.java` | All map logic (extends `java.util.AbstractMap`); subclasses implement `createCachedObject(V)` |
+| `src/main/java/com/schoste/ddd/util/fs/CachedHashMapImpl.java` | Creates a `CachedObjectImpl` per value in `storagePath` |
+| `src/test/java/com/schoste/ddd/util/CachedObjectUT.java` | Contract test for every `CachedObject` implementation |
+| `src/test/java/com/schoste/ddd/util/CachedHashMapUT.java` | Contract test for every `CachedHashMap` implementation |
+| `src/test/java/com/schoste/ddd/util/fs/*ImplUT.java` | Factories for the contract tests + file-system specific tests |
+
+## Architecture pattern (follow it for every new utility)
+
+1. **Interface** in `com.schoste.ddd.util`: the contract. Its Javadoc lists the usage rules.
+2. **`Abstract*` class** in `com.schoste.ddd.util`: all logic that doesn't depend on the storage.
+   The storage-specific part is one or two `abstract protected` methods.
+3. **Implementation** per storage in a sub-package (`fs` = file system), named `*Impl`.
+4. **Contract test** `*UT` (abstract) in `com.schoste.ddd.util` with `abstract protected` factory methods,
+   and per implementation a subclass `<sub-package>/*ImplUT` that implements the factories and adds
+   implementation-specific tests. Contract tests may use protected fields (same package) and skip with
+   `Assume` for implementations that don't derive from the `Abstract*` class.
+
+Checklist for a new utility or implementation:
+
+- [ ] Write the tests first and run them red; if the behaviour already exists, break the code temporarily
+      and check that the new tests fail, then restore it.
+- [ ] Javadoc for everything public/protected, including the usage rules in the interface.
+- [ ] `serialVersionUID` on serializable classes; decide what serialization writes.
+- [ ] Every way to remove or replace something frees its storage (`close()`).
+- [ ] `mvn -B clean verify` passes; update `README.md` (users) and this file (decisions, code map).
 
 ## Design decisions (don't change without asking)
+
+### CachedObject
 
 - `hashCode()` is taken once when the holder is created and never recalculated. It is serialized,
   so a deserialized copy keeps it. Cached objects must not change their hash code.
@@ -44,6 +70,69 @@ that keeps a `Serializable` object only weakly in memory and reloads it from sto
 - `fs.CachedObjectImpl` deletes cache files on `close()`; files that were not closed are deleted by
   one shutdown hook (tracked in `cacheFilesToDeleteOnExit`). Don't use `File#deleteOnExit()`, it leaks.
 - Serialization of `fs.CachedObjectImpl` writes only `cacheFilePath` and `objHashCode`, never the cached object.
+  `readObject` loads the object once (into the weak reference).
+
+### CachedHashMap
+
+- Values live in `protected HashMap<K, CachedObject<V>> cachedValues`; `AbstractCachedHashMap` extends
+  `java.util.AbstractMap` and reuses it wherever possible. `cachedValues` is not `final` only because
+  `clone()` replaces it.
+- `put(k, v)` wraps the value in a new `CachedObject` and commits it. Calling `put` again is how a single
+  changed value is saved; `commit()` saves all values that are in memory.
+- Null values are rejected with `NullPointerException` (a `CachedObject` can't hold null); null keys are allowed.
+- `Map` methods can't throw checked exceptions: storage errors become `IllegalStateException` with the
+  original exception as cause (`unchecked(...)`).
+- Values returned by the map may be copies loaded from storage, not the instance that was put.
+- **Lazy views**: `entrySet()` iterates over `cachedValues`; its entries (`LazyEntry`) load a value only in
+  `getValue()` (via `map.get(key)`) and keep no reference. Every other view and bulk method of `AbstractMap`
+  (`keySet`, `values`, `containsValue`, `equals`, `hashCode`, `toString`) goes through it. Never add caches,
+  lists of values or eager loading; key-only methods must not load values (tested by `testKeysDontLoadValues`,
+  `testValuesAreNotRetained`).
+- **Every removal path closes the removed `CachedObject`** (deletes its storage): `remove`, replacing via
+  `put`/`setValue`, `clear`, `close`, and the iterator's `remove()` (which covers `keySet()`/`values()`
+  removal, `removeIf`, `retainAll`). A new removal path must do the same.
+- `close()`/`clear()` try to close every value; the first `IOException` is thrown with the others suppressed.
+- **Serialization writes references only**: `cachedValues` is serialized as is, so each `CachedObjectImpl` writes
+  its cache-file path. The deserialized map shares the cache files with the original (closing one frees
+  the other's storage). Callers must `commit()` before serializing. `K` has no `Serializable` bound
+  (like `java.util.HashMap`); non-serializable keys fail at runtime with `NotSerializableException`.
+- `clone()`: `super.clone()` copies all fields (also of subclasses, e.g. `storagePath`), then every
+  `CachedObject` is cloned, so the clone has its own storage and instances with the current state.
+  If cloning fails, already cloned values are closed and `CloneNotSupportedException` (with cause) is thrown.
+
+## Code and Javadoc rules
+
+- The code must compile against **Java 8** (`maven.compiler.release=8`), even though newer JDKs build it.
+  No `var`, records, `List.of`, text blocks, etc.
+- Formatting follows `.editorconfig`: UTF-8, LF line endings (enforced by `.gitattributes`), 4 spaces,
+  no tabs, no trailing whitespace, final newline. Braces on their own line (Allman style), `this.` for members.
+- doclint runs with `failOnWarnings`: every public/protected class, constructor, field and method needs a
+  complete comment (`@param`, `@return`, `@throws`). Write explicit constructors instead of relying on the default one.
+- The private serialization members (`serialPersistentFields`, `writeObject`, `readObject`) need comments too;
+  they appear on the "Serialized Form" page.
+- `{@see ...}` is not an inline tag; use `{@link ...}`. Field references use `#`: `{@link System#err}`.
+- In an interface, `{@link #toString()}` fails because the interface doesn't declare it;
+  use `{@link java.lang.Object#toString() toString()}`.
+- Test classes are checked as well, except for missing comments.
+
+## Tests
+
+- Test classes are named `*UT` (Surefire is configured to include `**/*UT.java`).
+- The test classes ship as a test-jar so other implementations can reuse the contract tests.
+- Don't rely on GC timing: simulate collection by clearing the weak reference (`objRef.clear()`), or wait on
+  your own `WeakReference` with a bounded `System.gc()` loop and assert that it was cleared.
+- Helpers in `CachedHashMapUT`: `simulateGC(map)`, `cachedValueOf(map, key)`, `isLoaded(map, key)`,
+  `assertClosed(cachedObject)`, `serializeAndDeserialize(obj)`.
+- Tests that need files use their own temporary folder (`Files.createTempDirectory`) and delete it in `finally`.
+
+## Working in this repository
+
+- Work in small, independently committable steps; the maintainer reviews and commits each one.
+  Ask before changing a design decision above, and offer options with a recommendation.
+- Environment: Windows with Git Bash and PowerShell. In Git Bash, `grep $'\r'` doesn't work (MSYS drops
+  the argument); count CR bytes with `tr -cd '\r' < file | wc -c`. For `java -cp`, separate entries with `;`
+  and convert paths with `cygpath -w`.
+- Python and the GitHub CLI (`gh`) may not be installed; if CI fails, ask the maintainer for the log.
 
 ## Publishing
 
