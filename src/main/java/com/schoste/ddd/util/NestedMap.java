@@ -41,6 +41,8 @@ public interface NestedMap<K, V>
 {
     /**
      * Stores a value at a key path of one key.
+     * A null key must be cast to the key class, e.g. {@code put((String) null, value)}, because the call
+     * {@code put(null, value)} also matches {@link #put(List, Object)}.
      *
      * @param k1 the key
      * @param value the value to store, not null
