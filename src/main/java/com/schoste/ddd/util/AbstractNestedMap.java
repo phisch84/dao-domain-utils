@@ -105,6 +105,33 @@ abstract public class AbstractNestedMap<K, V> implements NestedMap<K, V>
      */
     abstract protected Map<K, V> createValueMap();
 
+    /**
+     * Returns the maps which hold the values of all levels of the whole map (also for a sub map), for example
+     * to save or close them. The list is a copy; the maps are the ones the levels use.
+     *
+     * @return the value maps of all levels which have values
+     */
+    protected List<Map<K, V>> getValueMaps()
+    {
+        List<Map<K, V>> valueMaps = new ArrayList<Map<K, V>>();
+
+        addValueMaps(this.owner.root, valueMaps);
+
+        return valueMaps;
+    }
+
+    private static <K, V> void addValueMaps(Level<K, V> level, List<Map<K, V>> valueMaps)
+    {
+        if (level.values != null)
+        {
+            valueMaps.add(level.values);
+        }
+        for (Level<K, V> child : level.children.values())
+        {
+            addValueMaps(child, valueMaps);
+        }
+    }
+
     @SafeVarargs
     private static <K> List<K> keys(K... keys)
     {
