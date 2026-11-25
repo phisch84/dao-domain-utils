@@ -1,13 +1,8 @@
 package com.schoste.ddd.util;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.lang.ref.WeakReference;
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -16,6 +11,9 @@ import java.util.Map;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
+
+import static com.schoste.ddd.util.TestHelpers.list;
+import static com.schoste.ddd.util.TestHelpers.serializeAndDeserialize;
 
 /**
  * Test suite class for the abstract {@link com.schoste.ddd.util.AbstractCachedHashMap} class and its implementations
@@ -44,11 +42,6 @@ abstract public class CachedHashMapUT
 
             ((AbstractCachedObject<?>) cachedValue).objRef.clear();
         }
-    }
-
-    private static ArrayList<String> list(String... values)
-    {
-        return new ArrayList<>(Arrays.asList(values));
     }
 
     /**
@@ -87,30 +80,6 @@ abstract public class CachedHashMapUT
         Assume.assumeTrue(cachedValue instanceof AbstractCachedObject);
 
         return ((AbstractCachedObject<?>) cachedValue).objRef.get() != null;
-    }
-
-    /**
-     * Serializes an object into a byte array and deserializes it again.
-     *
-     * @param <T> the class of the object
-     * @param obj the object to serialize
-     * @return the deserialized copy
-     * @throws Exception re-throws every exception
-     */
-    @SuppressWarnings("unchecked")
-    protected static <T> T serializeAndDeserialize(T obj) throws Exception
-    {
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-
-        try (ObjectOutputStream oos = new ObjectOutputStream(bytes))
-        {
-            oos.writeObject(obj);
-        }
-
-        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray())))
-        {
-            return (T) ois.readObject();
-        }
     }
 
     /**
@@ -224,7 +193,7 @@ abstract public class CachedHashMapUT
             ArrayList<String> actual = testMap.get("key");
 
             Assert.assertEquals(value, actual);
-            Assert.assertFalse(value == actual);
+            Assert.assertNotSame(value, actual);
         }
     }
 
@@ -440,7 +409,7 @@ abstract public class CachedHashMapUT
             CachedHashMap<String, ArrayList<String>> deserializedMap = serializeAndDeserialize(testMap);
 
             Assert.assertNotNull(deserializedMap);
-            Assert.assertFalse(testMap == deserializedMap);
+            Assert.assertNotSame(testMap, deserializedMap);
             Assert.assertEquals(testMap.keySet(), deserializedMap.keySet());
             Assert.assertEquals(list("1"), deserializedMap.get("one"));
             Assert.assertEquals(list("2", "2 committed"), deserializedMap.get("two"));
@@ -469,15 +438,15 @@ abstract public class CachedHashMapUT
             try (CachedHashMap<String, ArrayList<String>> clonedMap = (CachedHashMap<String, ArrayList<String>>) testMap.clone())
             {
                 Assert.assertNotNull(clonedMap);
-                Assert.assertFalse(testMap == clonedMap);
-                Assert.assertTrue(testMap.equals(clonedMap));
-                Assert.assertTrue(clonedMap.equals(testMap));
+                Assert.assertNotSame(testMap, clonedMap);
+                Assert.assertEquals(testMap, clonedMap);
+                Assert.assertEquals(clonedMap, testMap);
 
                 for (String key : testMap.keySet())
                 {
-                    Assert.assertFalse(cachedValueOf(testMap, key) == cachedValueOf(clonedMap, key));
+                    Assert.assertNotSame(cachedValueOf(testMap, key), cachedValueOf(clonedMap, key));
                     Assert.assertEquals(testMap.get(key), clonedMap.get(key));
-                    Assert.assertFalse(testMap.get(key) == clonedMap.get(key));
+                    Assert.assertNotSame(testMap.get(key), clonedMap.get(key));
                 }
             }
         }
@@ -653,8 +622,8 @@ abstract public class CachedHashMapUT
 
             Assert.assertTrue(testMap.containsValue(list("2")));
             Assert.assertFalse(testMap.containsValue(list("3")));
-            Assert.assertTrue(testMap.equals(expected));
-            Assert.assertTrue(expected.equals(testMap));
+            Assert.assertEquals(testMap, expected);
+            Assert.assertEquals(expected, testMap);
             Assert.assertEquals(expected.hashCode(), testMap.hashCode());
             Assert.assertEquals(2, testMap.values().size());
             Assert.assertTrue(testMap.values().containsAll(expected.values()));
@@ -756,7 +725,6 @@ abstract public class CachedHashMapUT
      *
      * @throws Exception re-throws every exception
      */
-    @SuppressWarnings("unlikely-arg-type")
     @Test
     public void testEntryEqualsHashCodeAndToString() throws Exception
     {
@@ -768,13 +736,13 @@ abstract public class CachedHashMapUT
             Map.Entry<String, ArrayList<String>> entry = testMap.entrySet().iterator().next();
             Map.Entry<String, ArrayList<String>> expected = new AbstractMap.SimpleEntry<>("one", list("1"));
 
-            Assert.assertTrue(entry.equals(expected));
-            Assert.assertTrue(expected.equals(entry));
+            Assert.assertEquals(entry, expected);
+            Assert.assertEquals(expected, entry);
             Assert.assertEquals(expected.hashCode(), entry.hashCode());
             Assert.assertEquals(expected.toString(), entry.toString());
-            Assert.assertFalse(entry.equals(new AbstractMap.SimpleEntry<>("one", list("other"))));
-            Assert.assertFalse(entry.equals(new AbstractMap.SimpleEntry<>("other", list("1"))));
-            Assert.assertFalse(entry.equals("one=[1]"));
+            Assert.assertNotEquals(entry, new AbstractMap.SimpleEntry<>("one", list("other")));
+            Assert.assertNotEquals(entry, new AbstractMap.SimpleEntry<>("other", list("1")));
+            Assert.assertNotEquals(entry, "one=[1]");
         }
     }
 }

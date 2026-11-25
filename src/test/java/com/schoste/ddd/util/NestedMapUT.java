@@ -3,12 +3,14 @@ package com.schoste.ddd.util;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 import org.junit.Assert;
 import org.junit.Test;
+
+import static com.schoste.ddd.util.TestHelpers.serializeAndDeserialize;
+import static com.schoste.ddd.util.TestHelpers.set;
 
 /**
  * Test suite class for the {@link com.schoste.ddd.util.NestedMap} interface and its implementations
@@ -24,11 +26,6 @@ abstract public class NestedMapUT
      * @throws Exception if the map can't be created
      */
     abstract protected NestedMap<String, String> createNestedMap() throws Exception;
-
-    private static Set<String> set(String... keys)
-    {
-        return new HashSet<>(Arrays.asList(keys));
-    }
 
     /**
      * Asserts that every put overload stores the value at its path and that get finds it.
@@ -609,19 +606,6 @@ abstract public class NestedMapUT
 
         Assert.assertEquals(set("x"), map.keySet());
         Assert.assertEquals(1, map.size());
-    }
-
-    /**
-     * Serializes and deserializes an object (see {@link com.schoste.ddd.util.CachedHashMapUT#serializeAndDeserialize(Object)}).
-     *
-     * @param <T> the class of the object
-     * @param obj the object
-     * @return the deserialized copy
-     * @throws Exception re-throws every exception
-     */
-    protected static <T> T serializeAndDeserialize(T obj) throws Exception
-    {
-        return CachedHashMapUT.serializeAndDeserialize(obj);
     }
 
     /**

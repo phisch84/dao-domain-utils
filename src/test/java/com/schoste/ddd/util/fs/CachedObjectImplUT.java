@@ -18,13 +18,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
 
 import org.junit.Assert;
 import org.junit.Test;
 
 import com.schoste.ddd.util.CachedObject;
 import com.schoste.ddd.util.CachedObjectUT;
+import com.schoste.ddd.util.TestHelpers;
 
 public class CachedObjectImplUT extends CachedObjectUT
 {
@@ -126,9 +126,7 @@ public class CachedObjectImplUT extends CachedObjectUT
         }
         finally
         {
-            Files.deleteIfExists(storagePath);
-            Files.deleteIfExists(storagePath.getParent());
-            Files.delete(tempDir);
+            TestHelpers.deleteRecursively(tempDir.toFile());
         }
     }
 
@@ -239,12 +237,7 @@ public class CachedObjectImplUT extends CachedObjectUT
 
             for (CachedObjectImpl<String> obj : createdObjs) obj.close();
 
-            try (Stream<Path> files = Files.list(storagePath))
-            {
-                for (Path file : (Iterable<Path>) files::iterator) Files.delete(file);
-            }
-
-            Files.delete(storagePath);
+            TestHelpers.deleteRecursively(storagePath.toFile());
         }
     }
 }

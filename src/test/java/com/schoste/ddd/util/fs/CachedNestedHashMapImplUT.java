@@ -12,8 +12,12 @@ import java.util.Map;
 import org.junit.Assert;
 import org.junit.Test;
 
+import static com.schoste.ddd.util.TestHelpers.countFiles;
+import static com.schoste.ddd.util.TestHelpers.serializeAndDeserialize;
+
 import com.schoste.ddd.util.CachedNestedMap;
 import com.schoste.ddd.util.CachedNestedMapUT;
+import com.schoste.ddd.util.TestHelpers;
 
 /**
  * Runs the contract tests of {@link com.schoste.ddd.util.CachedNestedMapUT} and {@link com.schoste.ddd.util.NestedMapUT}
@@ -25,11 +29,6 @@ public class CachedNestedHashMapImplUT extends CachedNestedMapUT
     protected <V extends Serializable> CachedNestedMap<String, V> createCachedNestedMap() throws Exception
     {
         return new CachedNestedHashMapImpl<String, V>();
-    }
-
-    private static int countFiles(File folder)
-    {
-        return folder.list().length;
     }
 
     /**
@@ -94,9 +93,7 @@ public class CachedNestedHashMapImplUT extends CachedNestedMapUT
         }
         finally
         {
-            for (File file : storage.listFiles()) file.delete();
-
-            storage.delete();
+            TestHelpers.deleteRecursively(storage);
         }
     }
 
@@ -127,9 +124,7 @@ public class CachedNestedHashMapImplUT extends CachedNestedMapUT
         }
         finally
         {
-            for (File file : storage.listFiles()) file.delete();
-
-            storage.delete();
+            TestHelpers.deleteRecursively(storage);
         }
     }
 
@@ -162,9 +157,7 @@ public class CachedNestedHashMapImplUT extends CachedNestedMapUT
         }
         finally
         {
-            for (File file : storage.listFiles()) file.delete();
-
-            storage.delete();
+            TestHelpers.deleteRecursively(storage);
         }
     }
 
@@ -278,9 +271,7 @@ public class CachedNestedHashMapImplUT extends CachedNestedMapUT
         }
         finally
         {
-            for (File file : storage.listFiles()) file.delete();
-
-            storage.delete();
+            TestHelpers.deleteRecursively(storage);
         }
     }
 
@@ -311,9 +302,7 @@ public class CachedNestedHashMapImplUT extends CachedNestedMapUT
         }
         finally
         {
-            for (File file : storage.listFiles()) file.delete();
-
-            storage.delete();
+            TestHelpers.deleteRecursively(storage);
         }
     }
 }

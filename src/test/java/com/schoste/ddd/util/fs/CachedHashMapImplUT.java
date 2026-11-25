@@ -8,8 +8,12 @@ import java.util.Arrays;
 import org.junit.Assert;
 import org.junit.Test;
 
+import static com.schoste.ddd.util.TestHelpers.countFiles;
+import static com.schoste.ddd.util.TestHelpers.serializeAndDeserialize;
+
 import com.schoste.ddd.util.CachedHashMap;
 import com.schoste.ddd.util.CachedHashMapUT;
+import com.schoste.ddd.util.TestHelpers;
 
 public class CachedHashMapImplUT extends CachedHashMapUT
 {
@@ -37,15 +41,10 @@ public class CachedHashMapImplUT extends CachedHashMapUT
             CachedObjectImpl<?> original = (CachedObjectImpl<?>) cachedValueOf(testMap, "one");
             CachedObjectImpl<?> copy = (CachedObjectImpl<?>) cachedValueOf(deserializedMap, "one");
 
-            Assert.assertFalse(original == copy);
+            Assert.assertNotSame(original, copy);
             Assert.assertEquals(original.cacheFilePath, copy.cacheFilePath);
             Assert.assertEquals(testMap.storagePath, deserializedMap.storagePath);
         }
-    }
-
-    private static int countFiles(File folder)
-    {
-        return folder.list().length;
     }
 
     /**
@@ -76,9 +75,7 @@ public class CachedHashMapImplUT extends CachedHashMapUT
         }
         finally
         {
-            for (File file : storage.listFiles()) file.delete();
-
-            storage.delete();
+            TestHelpers.deleteRecursively(storage);
         }
     }
 
@@ -114,9 +111,7 @@ public class CachedHashMapImplUT extends CachedHashMapUT
         }
         finally
         {
-            for (File file : storage.listFiles()) file.delete();
-
-            storage.delete();
+            TestHelpers.deleteRecursively(storage);
         }
     }
 }

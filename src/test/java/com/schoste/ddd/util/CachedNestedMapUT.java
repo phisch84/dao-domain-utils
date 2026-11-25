@@ -2,13 +2,14 @@ package com.schoste.ddd.util;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
+
+import static com.schoste.ddd.util.TestHelpers.list;
 
 /**
  * Test suite class for the {@link com.schoste.ddd.util.CachedNestedMap} interface and its implementations
@@ -31,11 +32,6 @@ abstract public class CachedNestedMapUT extends NestedMapUT
     protected NestedMap<String, String> createNestedMap() throws Exception
     {
         return this.<String>createCachedNestedMap();
-    }
-
-    private static ArrayList<String> list(String... values)
-    {
-        return new ArrayList<>(Arrays.asList(values));
     }
 
     /**

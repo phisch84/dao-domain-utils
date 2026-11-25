@@ -1,9 +1,5 @@
 package com.schoste.ddd.util;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -12,6 +8,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
+
+import static com.schoste.ddd.util.TestHelpers.serializeAndDeserialize;
 
 /**
  * Test suite class for the abstract {@link com.schoste.ddd.util.AbstractCachedObject} class and its implementations
@@ -37,7 +35,6 @@ abstract public class CachedObjectUT
         try(CachedObject<String> testObj = this.createCachedObj(objToCache))
         {
             Assert.assertNotNull(testObj);
-            Assert.assertTrue(true);
         }
     }
 
@@ -54,12 +51,7 @@ abstract public class CachedObjectUT
 
         try(CachedObject<Integer> testObj = this.createCachedObj(expectedObj))
         {
-            Integer actualObj = testObj.get();
-
-            Assert.assertNotNull(actualObj);
-            Assert.assertTrue(expectedObj.equals(actualObj));
-            Assert.assertTrue(actualObj.equals(expectedObj));
-            Assert.assertTrue(actualObj == expectedObj);
+            Assert.assertSame(expectedObj, testObj.get());
         }
     }
 
@@ -78,12 +70,7 @@ abstract public class CachedObjectUT
         {
             testObj.commit();
 
-            Integer actualObj = testObj.get();
-
-            Assert.assertNotNull(actualObj);
-            Assert.assertTrue(expectedObj.equals(actualObj));
-            Assert.assertTrue(actualObj.equals(expectedObj));
-            Assert.assertTrue(actualObj == expectedObj);
+            Assert.assertSame(expectedObj, testObj.get());
         }
     }
 
@@ -159,7 +146,6 @@ abstract public class CachedObjectUT
      *
      * @throws Exception re-throws every exception
      */
-    @SuppressWarnings("unchecked")
     @Test
     public void testSerializeAndDeserialize() throws Exception
     {
@@ -167,25 +153,13 @@ abstract public class CachedObjectUT
 
         try(CachedObject<String> testObj = this.createCachedObj(objToCache))
         {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-
-            try (ObjectOutputStream oos = new ObjectOutputStream(bytes))
-            {
-                oos.writeObject(testObj);
-            }
-
-            CachedObject<String> deserializedObj;
-
-            try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray())))
-            {
-                deserializedObj = (CachedObject<String>) ois.readObject();
-            }
+            CachedObject<String> deserializedObj = serializeAndDeserialize(testObj);
 
             Assert.assertNotNull(deserializedObj);
-            Assert.assertFalse(testObj == deserializedObj);
+            Assert.assertNotSame(testObj, deserializedObj);
             Assert.assertEquals(testObj.hashCode(), deserializedObj.hashCode());
-            Assert.assertTrue(testObj.equals(deserializedObj));
-            Assert.assertTrue(deserializedObj.equals(testObj));
+            Assert.assertEquals(testObj, deserializedObj);
+            Assert.assertEquals(deserializedObj, testObj);
             Assert.assertEquals(objToCache, deserializedObj.get());
         }
     }
@@ -212,16 +186,14 @@ abstract public class CachedObjectUT
             CachedObject<Integer> clonedCachedObj = (CachedObject<Integer>) oneCachedObj.clone())
         {
             Assert.assertNotNull(clonedCachedObj);
-            Assert.assertTrue(oneCachedObj.equals(clonedCachedObj));
-            Assert.assertTrue(clonedCachedObj.equals(oneCachedObj));
-            Assert.assertFalse(oneCachedObj == clonedCachedObj);
+            Assert.assertEquals(oneCachedObj, clonedCachedObj);
+            Assert.assertEquals(clonedCachedObj, oneCachedObj);
+            Assert.assertNotSame(oneCachedObj, clonedCachedObj);
 
             Integer clonedInstance = clonedCachedObj.get();
 
-            Assert.assertNotNull(clonedInstance);
-            Assert.assertTrue(oneInstance.equals(clonedInstance));
-            Assert.assertTrue(clonedInstance.equals(oneInstance));
-            Assert.assertFalse(oneInstance == clonedInstance);
+            Assert.assertEquals(oneInstance, clonedInstance);
+            Assert.assertNotSame(oneInstance, clonedInstance);
         }
     }
 
@@ -249,7 +221,7 @@ abstract public class CachedObjectUT
                 ArrayList<String> clonedInstance = clonedCachedObj.get();
 
                 Assert.assertEquals(Arrays.asList("committed", "uncommitted"), clonedInstance);
-                Assert.assertFalse(oneInstance == clonedInstance);
+                Assert.assertNotSame(oneInstance, clonedInstance);
 
                 clonedInstance.add("changed in clone");
 
@@ -322,10 +294,10 @@ abstract public class CachedObjectUT
         try (CachedObject<String> testObj = this.createCachedObj(objToCache);
              CachedObject<String> otherObj = this.createCachedObj("other"))
         {
-            Assert.assertFalse(testObj.equals(null));
-            Assert.assertFalse(testObj.equals(objToCache));
-            Assert.assertFalse(testObj.equals(otherObj));
-            Assert.assertFalse(otherObj.equals(testObj));
+            Assert.assertNotEquals(testObj, null);
+            Assert.assertNotEquals(testObj, objToCache);
+            Assert.assertNotEquals(testObj, otherObj);
+            Assert.assertNotEquals(otherObj, testObj);
         }
     }
 
@@ -346,8 +318,8 @@ abstract public class CachedObjectUT
 
             closedObj.close();
 
-            Assert.assertFalse(testObj.equals(closedObj));
-            Assert.assertFalse(closedObj.equals(testObj));
+            Assert.assertNotEquals(testObj, closedObj);
+            Assert.assertNotEquals(closedObj, testObj);
         }
     }
 

@@ -43,6 +43,7 @@ User-facing documentation is in `README.md`; the contract of each class is its J
 | `src/test/java/com/schoste/ddd/util/CachedObjectUT.java` | Contract test for every `CachedObject` implementation |
 | `src/test/java/com/schoste/ddd/util/CachedHashMapUT.java` | Contract test for every `CachedHashMap` implementation |
 | `src/test/java/com/schoste/ddd/util/AbstractCachedHashMapUT.java` | Storage errors of `AbstractCachedHashMap` (with `FailingCachedObject`) |
+| `src/test/java/com/schoste/ddd/util/TestHelpers.java` | Shared static test helpers (lists, sets, serialization, temp folders) |
 | `src/test/java/com/schoste/ddd/util/FailingCachedObject.java` | Test double: in-memory `CachedObject` whose `get`/`commit`/`close`/`clone` can be made to fail |
 | `src/test/java/com/schoste/ddd/util/NestedMapUT.java` | Contract test for every `NestedMap` implementation |
 | `src/test/java/com/schoste/ddd/util/AbstractNestedMapUT.java` | Failures in `AbstractNestedMap#clone()` (test map whose n-th value-map copy fails) |
@@ -179,8 +180,13 @@ Checklist for a new utility or implementation:
 - The test classes ship as a test-jar so other implementations can reuse the contract tests.
 - Don't rely on GC timing: simulate collection by clearing the weak reference (`objRef.clear()`), or wait on
   your own `WeakReference` with a bounded `System.gc()` loop and assert that it was cleared.
+- `TestHelpers` (static imports, also from sub-packages): `list(...)`, `set(...)`, `serializeAndDeserialize(obj)`,
+  `countFiles(folder)`, `deleteRecursively(folder)` (cleanup of temporary folders in `finally`). Add helpers that
+  don't need a class's internals there instead of copying them into a test class.
+- Assertions show both values on failure: `assertEquals`/`assertNotEquals`/`assertSame`/`assertNotSame`, never
+  `assertTrue(a.equals(b))` or `assertTrue(a == b)`. To test `equals` symmetry, assert both directions.
 - Helpers in `CachedHashMapUT`: `simulateGC(map)`, `cachedValueOf(map, key)`, `isLoaded(map, key)`,
-  `assertClosed(cachedObject)`, `serializeAndDeserialize(obj)` (also in `NestedMapUT`, for sub-packages).
+  `assertClosed(cachedObject)`.
 - Helpers in `CachedNestedMapUT`: `valueMapsOf(map)`, `simulateGC(map)`, `cachedValuesOf(map)`,
   `cachedValueWith(map, value)`. Its generic factory `createCachedNestedMap()` lets tests use mutable values
   (`ArrayList`), while `NestedMapUT` uses `String` values.
