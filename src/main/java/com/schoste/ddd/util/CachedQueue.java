@@ -33,8 +33,9 @@ import java.util.Queue;
  *     as a whole. Changes to the elements themselves are not synchronized by the queue.</li>
  * <li>Iterators are weakly consistent (like those of {@link java.util.concurrent.ConcurrentLinkedQueue}): an iterator
  *     returns the elements which were in the queue when it was created, in their order, and never throws a
- *     {@link java.util.ConcurrentModificationException}. Elements which another thread removed in the meantime are
- *     skipped; elements added in the meantime are not returned.</li>
+ *     {@link java.util.ConcurrentModificationException}. Elements which were removed before the iterator reaches them
+ *     are skipped; an element which another thread removes just while the iterator returns it may still be returned.
+ *     Elements added in the meantime are not returned.</li>
  * <li>The queue is {@link java.io.Serializable}, but like {@link com.schoste.ddd.util.CachedObject} it serializes only
  *     references to the storage of its elements, not the elements themselves (see the implementations for details).
  *     Therefore call {@link #commit()} before serializing, and note that the deserialized queue shares the storage with
