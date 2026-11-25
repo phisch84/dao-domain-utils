@@ -745,4 +745,165 @@ abstract public class NestedMapUT
             Assert.assertNull(e.getCause());
         }
     }
+
+    /**
+     * Creates a map of the implementation under test with the values 1 at the path a, 2 at a, x and 3 at b, y, z,
+     * put in the given order of the paths.
+     *
+     * @param reversed true to put the paths in reverse order
+     * @return the map
+     * @throws Exception re-throws every exception
+     */
+    private NestedMap<String, String> mapWithThreePaths(boolean reversed) throws Exception
+    {
+        NestedMap<String, String> map = this.createNestedMap();
+
+        if (reversed)
+        {
+            map.put("b", "y", "z", "3");
+            map.put("a", "x", "2");
+            map.put("a", "1");
+        }
+        else
+        {
+            map.put("a", "1");
+            map.put("a", "x", "2");
+            map.put("b", "y", "z", "3");
+        }
+        return map;
+    }
+
+    /**
+     * Asserts that two maps are equal (both ways) if they have the same key paths with equal values,
+     * independent of the order in which the values were put, and that equal maps have the same hash code.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testEqualsComparesPathsAndValues() throws Exception
+    {
+        NestedMap<String, String> map = this.mapWithThreePaths(false);
+        NestedMap<String, String> other = this.mapWithThreePaths(true);
+
+        Assert.assertEquals(map, map);
+        Assert.assertEquals(map, other);
+        Assert.assertEquals(other, map);
+        Assert.assertEquals(map.hashCode(), other.hashCode());
+        Assert.assertEquals(this.createNestedMap(), this.createNestedMap());
+    }
+
+    /**
+     * Asserts that maps are not equal if a value differs, if one has an additional path, or if the same value is
+     * at another path; and that a map is not equal to null or to an object which is no {@link NestedMap}.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testNotEqualsForOtherContent() throws Exception
+    {
+        NestedMap<String, String> map = this.mapWithThreePaths(false);
+
+        NestedMap<String, String> otherValue = this.mapWithThreePaths(false);
+        otherValue.put("a", "x", "other");
+
+        NestedMap<String, String> additionalPath = this.mapWithThreePaths(false);
+        additionalPath.put("c", "4");
+
+        NestedMap<String, String> otherPath = this.createNestedMap();
+        otherPath.put("a", "1");
+        otherPath.put("a", "x", "2");
+        otherPath.put("b", "y", "3");
+
+        for (NestedMap<String, String> other : Arrays.asList(otherValue, additionalPath, otherPath))
+        {
+            Assert.assertNotEquals(map, other);
+            Assert.assertNotEquals(other, map);
+        }
+
+        Assert.assertNotEquals(map, null);
+        Assert.assertNotEquals(map, Collections.singletonMap("a", "1"));
+    }
+
+    /**
+     * Asserts that equality depends only on the content: a map of the implementation under test is equal to a
+     * {@link NestedHashMap} with the same paths and values (both ways), and has the same hash code.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testEqualsAcrossImplementations() throws Exception
+    {
+        NestedMap<String, String> map = this.mapWithThreePaths(false);
+        NestedHashMap<String, String> other = new NestedHashMap<>();
+
+        other.put("b", "y", "z", "3");
+        other.put("a", "1");
+        other.put("a", "x", "2");
+
+        Assert.assertEquals(map, other);
+        Assert.assertEquals(other, map);
+        Assert.assertEquals(map.hashCode(), other.hashCode());
+    }
+
+    /**
+     * Asserts that a sub map is compared by its content, with paths relative to its own path:
+     * the sub map of the path a equals a map with 2 at the path x.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testSubMapEqualsByContent() throws Exception
+    {
+        NestedMap<String, String> map = this.mapWithThreePaths(false);
+        NestedHashMap<String, String> expected = new NestedHashMap<>();
+
+        expected.put("x", "2");
+
+        Assert.assertEquals(expected, map.getSubMap("a"));
+        Assert.assertEquals(map.getSubMap("a"), expected);
+        Assert.assertEquals(expected.hashCode(), map.getSubMap("a").hashCode());
+    }
+
+    /**
+     * Asserts the hash code defined by {@link NestedMap#hashCode()}: the sum over all values of
+     * (the key path as {@link List}).hashCode() ^ value.hashCode(), like a {@link java.util.Map} with paths as keys.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testHashCodeFormula() throws Exception
+    {
+        NestedMap<String, String> map = this.mapWithThreePaths(false);
+        int expected = (Arrays.asList("a").hashCode() ^ "1".hashCode())
+                     + (Arrays.asList("a", "x").hashCode() ^ "2".hashCode())
+                     + (Arrays.asList("b", "y", "z").hashCode() ^ "3".hashCode());
+
+        Assert.assertEquals(expected, map.hashCode());
+        Assert.assertEquals(0, this.createNestedMap().hashCode());
+    }
+
+    /**
+     * Asserts the format of {@link NestedMap#toString()}: every value as "[key path]=value", separated by ", "
+     * in braces, like {@link java.util.AbstractMap#toString()} with the paths as keys.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testToString() throws Exception
+    {
+        NestedMap<String, String> map = this.createNestedMap();
+
+        Assert.assertEquals("{}", map.toString());
+
+        map.put("a", "b", "v1");
+
+        Assert.assertEquals("{[a, b]=v1}", map.toString());
+
+        map.put("a", "v2");
+
+        String twoValues = map.toString();
+
+        Assert.assertTrue(twoValues, twoValues.equals("{[a]=v2, [a, b]=v1}") || twoValues.equals("{[a, b]=v1, [a]=v2}"));
+        Assert.assertEquals("{[b]=v1}", map.getSubMap("a").toString());
+    }
 }

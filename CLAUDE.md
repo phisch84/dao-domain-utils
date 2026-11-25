@@ -148,6 +148,11 @@ Checklist for a new utility or implementation:
 - `get` returns null for a path without value; null values are rejected (NPE), null keys allowed;
   an empty path throws `IllegalArgumentException` (except `getSubMap()`, which returns `this`).
 - `size()`/`isEmpty()` count values at any depth; `keySet()` is a copy of the first-level keys.
+- **Equality by content**, like `Map` with the key path (`List<K>`) as key, defined in the `NestedMap` interface so
+  implementations agree: `equals` = other is a `NestedMap`, same `size()`, and `other.get(path)` equals each value;
+  `hashCode` = sum of `path.hashCode() ^ value.hashCode()`; `toString` = `{[a]=1, [a, x]=2}` (paths as lists,
+  because a path can have a value and deeper keys). `AbstractNestedMap` implements them with `visitValues`, which
+  reads one value at a time. Sub maps compare with paths relative to their own path.
 - **Structure** (`AbstractNestedMap`): private `Level` = `Map<K, V> values` (from `createValueMap()`, null while empty)
   + `HashMap<K, Level> children`. Only the value map is storage-specific; keys and levels are always in memory.
 - **Sub maps are live views by path**: private `SubMap extends AbstractNestedMap` shares the owner's `root` and

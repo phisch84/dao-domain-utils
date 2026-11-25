@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiPredicate;
 
 /**
  * Abstract implementation of {@link com.schoste.ddd.util.NestedMap} with all logic that doesn't depend on the map
@@ -479,6 +480,130 @@ abstract public class AbstractNestedMap<K, V> implements NestedMap<K, V>
         }
         clear(levels.get(levels.size() - 1));
         prune(levels, this.path);
+    }
+
+    /**
+     * Calls the visitor for every value at any depth below a level, with its key path relative to the level,
+     * until the visitor returns false. Values are read one at a time (cached values are loaded on demand).
+     *
+     * @return false if the visitor returned false, true if it was called for every value
+     */
+    private static <K, V> boolean visitValues(Level<K, V> level, List<K> path, BiPredicate<List<K>, V> visitor)
+    {
+        if (level.values != null)
+        {
+            for (Map.Entry<K, V> entry : level.values.entrySet())
+            {
+                List<K> valuePath = new ArrayList<K>(path);
+
+                valuePath.add(entry.getKey());
+
+                if (!visitor.test(valuePath, entry.getValue()))
+                {
+                    return false;
+                }
+            }
+        }
+        for (Map.Entry<K, Level<K, V>> child : level.children.entrySet())
+        {
+            List<K> childPath = new ArrayList<K>(path);
+
+            childPath.add(child.getKey());
+
+            if (!visitValues(child.getValue(), childPath, visitor))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Calls the visitor for every value of this (sub) map, with its key path relative to this map.
+     *
+     * @return false if the visitor returned false, true if it was called for every value
+     */
+    private boolean visitValues(BiPredicate<List<K>, V> visitor)
+    {
+        Level<K, V> level = this.level(this.path, this.path.size());
+
+        return (level == null) || visitValues(level, new ArrayList<K>(), visitor);
+    }
+
+    /**
+     * Compares the content, see {@link NestedMap#equals(Object)}: the other map must have the same number of values,
+     * and an equal value at the key path of each value of this map. Reads every value of this map once.
+     *
+     * @param other the object to compare to
+     * @return true if other is a {@link NestedMap} with the same key paths and equal values
+     */
+    @Override
+    @SuppressWarnings("unchecked")
+    public boolean equals(Object other)
+    {
+        if (other == this)
+        {
+            return true;
+        }
+        if (!(other instanceof NestedMap))
+        {
+            return false;
+        }
+        NestedMap<K, V> otherMap = (NestedMap<K, V>) other;
+
+        if (otherMap.size() != this.size())
+        {
+            return false;
+        }
+        try
+        {
+            return this.visitValues((path, value) -> value.equals(otherMap.get((K[]) path.toArray())));
+        }
+        catch (ClassCastException | NullPointerException e)
+        {
+            // like java.util.AbstractMap#equals: the other map doesn't accept the keys of this one
+            return false;
+        }
+    }
+
+    /**
+     * Computes the hash code from the content, see {@link NestedMap#hashCode()}. Reads every value once.
+     *
+     * @return the sum of (key path as {@link List}).hashCode() ^ value.hashCode() over all values
+     */
+    @Override
+    public int hashCode()
+    {
+        int[] hashCode = { 0 };
+
+        this.visitValues((path, value) ->
+        {
+            hashCode[0] += path.hashCode() ^ value.hashCode();
+            return true;
+        });
+        return hashCode[0];
+    }
+
+    /**
+     * Lists the content, see {@link NestedMap#toString()}. Reads every value once.
+     *
+     * @return the values as {@code {[key, path]=value, ...}}
+     */
+    @Override
+    public String toString()
+    {
+        StringBuilder string = new StringBuilder("{");
+
+        this.visitValues((path, value) ->
+        {
+            if (string.length() > 1)
+            {
+                string.append(", ");
+            }
+            string.append(path).append('=').append(value);
+            return true;
+        });
+        return string.append('}').toString();
     }
 
     /**

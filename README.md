@@ -164,6 +164,9 @@ map.size();                                       // 4: all values at any depth
 - **Serializable** if the keys and values are. A serialized sub map includes the whole map it is a view of.
 - **Not thread-safe**, like `java.util.HashMap`: synchronize access from several threads, also through sub maps.
 - `NestedMap` is not a `java.util.Map`, because a path has several keys.
+- **Compared by content**, like a `Map` with the key paths as keys: two nested maps are `equals` if they have the same
+  paths with equal values, also across implementations (a `NestedHashMap` can equal a `CachedNestedHashMapImpl`).
+  `toString()` lists the values as `{[a]=1, [a, x]=2}`. For cached maps, `equals`/`hashCode`/`toString` load every value.
 
 ## CachedNestedMap
 

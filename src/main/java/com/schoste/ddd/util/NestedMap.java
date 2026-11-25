@@ -32,7 +32,9 @@ import java.util.Set;
  * <li>Null values are rejected with {@link NullPointerException}, so {@code get} returning null means
  *     "no value at this path". Null keys are allowed.</li>
  * <li>A key path for a value has at least one key; an empty path throws {@link IllegalArgumentException}.</li>
- * <li>NestedMap is not a {@link java.util.Map}, because a path has several keys.</li>
+ * <li>NestedMap is not a {@link java.util.Map}, because a path has several keys. It compares like one with the key
+ *     paths as keys: {@link #equals(Object)}, {@link #hashCode()} and {@link #toString()} depend only on the key paths
+ *     and values, not on the implementation. A sub map compares its content with paths relative to its own path.</li>
  * <li>The map is {@link java.io.Serializable} and can be cloned with {@link #clone()}. Like {@link java.util.HashMap}, the
  *     keys and values must be {@link java.io.Serializable} for serializing, otherwise it fails with a
  *     {@link java.io.NotSerializableException}. A serialized sub map ({@link #getSubMap(Object...)}) includes the whole
@@ -201,4 +203,33 @@ public interface NestedMap<K, V> extends Cloneable, Serializable
      *         could not be cloned, with the original exception as cause
      */
     Object clone() throws CloneNotSupportedException;
+
+    /**
+     * Compares the content: the other object is equal if it is a {@link NestedMap} (of any implementation) with the
+     * same key paths and an equal value at each of them. Implementations whose values are cached load every value.
+     *
+     * @param other the object to compare to
+     * @return true if other is a {@link NestedMap} with the same key paths and equal values
+     */
+    @Override
+    boolean equals(Object other);
+
+    /**
+     * Computes the hash code from the content, like {@link java.util.Map#hashCode()} with the key paths as keys:
+     * the sum over all values of {@code keyPath.hashCode() ^ value.hashCode()}, where {@code keyPath} is the path
+     * as {@link List}. So equal maps have equal hash codes, also across implementations.
+     *
+     * @return the hash code of the content
+     */
+    @Override
+    int hashCode();
+
+    /**
+     * Lists the content like {@link java.util.AbstractMap#toString()} with the key paths as keys,
+     * e.g. {@code {[a]=1, [a, x]=2}}. The order of the values is not defined.
+     *
+     * @return the key paths and values
+     */
+    @Override
+    String toString();
 }
