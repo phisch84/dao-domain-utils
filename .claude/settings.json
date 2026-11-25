@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn -B clean verify)",
+      "Bash(mvn -B -q clean verify)",
+      "Bash(mvn -B clean test-compile org.pitest:pitest-maven:mutationCoverage)",
+      "Bash(cygpath *)"
+    ]
+  }
+}
