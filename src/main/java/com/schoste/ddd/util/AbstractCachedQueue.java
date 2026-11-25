@@ -1,6 +1,8 @@
 package com.schoste.ddd.util;
 
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.AbstractQueue;
 import java.util.ArrayDeque;
@@ -39,15 +41,18 @@ abstract public class AbstractCachedQueue<E extends Serializable> extends Abstra
     /**
      * The elements of the queue in their order (head first), each one wrapped in a {@link com.schoste.ddd.util.CachedObject}.
      * Read and change it only while holding {@link #lock}.
+     * Serialized as it is, so a serialized queue contains the serialized {@link com.schoste.ddd.util.CachedObject}s,
+     * which refer to the storage of the elements.
      * Not final, because {@link #clone()} replaces it in the clone.
      */
     protected ArrayDeque<CachedObject<E>> cachedElements = new ArrayDeque<>();
 
     /**
      * Guards the order of the elements ({@link #cachedElements}). Loading and saving elements happen without holding it.
-     * Not final, because {@link #clone()} gives the clone its own lock.
+     * Not serialized: a deserialized queue gets a new lock. Not final, because {@link #clone()} and deserializing give
+     * the new queue its own lock.
      */
-    protected ReentrantLock lock = new ReentrantLock();
+    protected transient ReentrantLock lock = new ReentrantLock();
 
     /**
      * Constructor for deriving classes.
@@ -510,14 +515,92 @@ abstract public class AbstractCachedQueue<E extends Serializable> extends Abstra
     }
 
     /**
-     * Not implemented yet.
+     * Creates the clone with {@link java.lang.Object#clone()}, which copies all fields (also those of deriving classes),
+     * and gives it its own lock and its own elements by cloning every {@link com.schoste.ddd.util.CachedObject}
+     * (see {@link com.schoste.ddd.util.CachedObject#clone()}). The elements are those which were in the queue when
+     * cloning started; an element which another thread removes in the meantime is skipped, like by an iterator.
+     * If cloning an element fails, the elements which were already cloned are closed again.
      *
-     * @return never
-     * @throws CloneNotSupportedException always
+     * @see com.schoste.ddd.util.CachedQueue#clone()
+     * @return a clone of this instance
+     * @throws CloneNotSupportedException if the instance could not be cloned, with the original exception as cause
      */
     @Override
+    @SuppressWarnings("unchecked")
     public Object clone() throws CloneNotSupportedException
     {
-        throw new CloneNotSupportedException("not implemented yet");
+        AbstractCachedQueue<E> clone = (AbstractCachedQueue<E>) super.clone();
+
+        clone.lock = new ReentrantLock();
+        clone.cachedElements = new ArrayDeque<>();
+
+        try
+        {
+            for (CachedObject<E> cachedElement : this.snapshot())
+            {
+                try
+                {
+                    clone.cachedElements.addLast((CachedObject<E>) cachedElement.clone());
+                }
+                catch (CloneNotSupportedException e)
+                {
+                    // closed because another thread removed it: skip it; otherwise cloning failed
+                    if (this.containsInstance(cachedElement)) throw e;
+                }
+            }
+            return clone;
+        }
+        catch (Exception e)
+        {
+            try
+            {
+                clone.closeAll();
+            }
+            catch (IOException closeFailure)
+            {
+                e.addSuppressed(closeFailure);
+            }
+
+            CloneNotSupportedException failure = new CloneNotSupportedException(e.getMessage());
+
+            failure.initCause(e);
+
+            throw failure;
+        }
+    }
+
+    /**
+     * Writes the elements' {@link com.schoste.ddd.util.CachedObject}s (see {@link #cachedElements}) while holding the
+     * lock, so another thread can't change the order while the queue is being serialized.
+     *
+     * @serialData the default serializable fields ({@link #cachedElements}, and those of deriving classes)
+     * @param out the stream to write to
+     * @throws IOException if writing to the stream failed
+     */
+    private void writeObject(ObjectOutputStream out) throws IOException
+    {
+        this.lock.lock();
+        try
+        {
+            out.defaultWriteObject();
+        }
+        finally
+        {
+            this.lock.unlock();
+        }
+    }
+
+    /**
+     * Reads the elements' {@link com.schoste.ddd.util.CachedObject}s and gives the deserialized queue a new lock.
+     *
+     * @param in the stream to read from
+     * @throws IOException if reading from the stream failed
+     * @throws ClassNotFoundException if the class of a serialized object could not be found
+     */
+    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException
+    {
+        in.defaultReadObject();
+
+        this.lock = new ReentrantLock();
     }
 }

@@ -1,6 +1,7 @@
 package com.schoste.ddd.util;
 
 import static com.schoste.ddd.util.TestHelpers.list;
+import static com.schoste.ddd.util.TestHelpers.serializeAndDeserialize;
 
 import java.io.Serializable;
 import java.lang.ref.WeakReference;
@@ -480,6 +481,126 @@ abstract public class CachedQueueUT
             Assert.assertEquals(queue, queue);
             Assert.assertNotEquals(queue, other);
             Assert.assertEquals(System.identityHashCode(queue), queue.hashCode());
+        }
+    }
+
+    /**
+     * Asserts that close() closes all elements and empties the queue, which can be used again afterwards.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testCloseClosesAllElements() throws Exception
+    {
+        try (CachedQueue<String> queue = this.createCachedQueue())
+        {
+            queue.offer("a");
+            queue.offer("b");
+
+            List<CachedObject<?>> cachedElements = cachedElementsOf(queue);
+
+            queue.close();
+
+            Assert.assertTrue(queue.isEmpty());
+
+            for (CachedObject<?> cachedElement : cachedElements) CachedHashMapUT.assertClosed(cachedElement);
+
+            queue.offer("c");
+
+            Assert.assertEquals("c", queue.poll());
+        }
+    }
+
+    /**
+     * Asserts that a deserialized queue has the elements in their order with the state they had at the last commit,
+     * and that the original queue keeps its elements.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testSerializeAndDeserialize() throws Exception
+    {
+        try (CachedQueue<ArrayList<String>> queue = this.createCachedQueue())
+        {
+            ArrayList<String> first = list("1");
+
+            queue.offer(first);
+            queue.offer(list("2"));
+            first.add("committed");
+            queue.commit();
+
+            CachedQueue<ArrayList<String>> copy = serializeAndDeserialize(queue);
+
+            Assert.assertNotSame(queue, copy);
+            Assert.assertEquals(2, copy.size());
+            Assert.assertEquals(Arrays.asList(list("1", "committed"), list("2")), new ArrayList<>(copy));
+            Assert.assertEquals(Arrays.asList(list("1", "committed"), list("2")), new ArrayList<>(queue));
+
+            copy.offer(list("3"));
+
+            Assert.assertEquals(3, copy.size());
+            Assert.assertEquals(2, queue.size());
+        }
+    }
+
+    /**
+     * Asserts that a clone has the elements in their order, with their current state, and its own cached objects and
+     * instances.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testClone() throws Exception
+    {
+        try (CachedQueue<ArrayList<String>> queue = this.createCachedQueue())
+        {
+            ArrayList<String> first = list("1");
+
+            queue.offer(first);
+            queue.offer(list("2"));
+            first.add("not committed");
+
+            try (CachedQueue<ArrayList<String>> clone = (CachedQueue<ArrayList<String>>) queue.clone())
+            {
+                Assert.assertNotSame(queue, clone);
+                Assert.assertEquals(Arrays.asList(list("1", "not committed"), list("2")), new ArrayList<>(clone));
+                Assert.assertNotSame(first, clone.peek());
+
+                List<CachedObject<?>> original = cachedElementsOf(queue);
+                List<CachedObject<?>> cloned = cachedElementsOf(clone);
+
+                for (int i = 0; i < original.size(); i++) Assert.assertNotSame(original.get(i), cloned.get(i));
+            }
+        }
+    }
+
+    /**
+     * Asserts that a clone is independent of the original: taking from or adding to one doesn't change the other,
+     * and closing the clone doesn't close the original's elements.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testCloneIsIndependent() throws Exception
+    {
+        try (CachedQueue<String> queue = this.createCachedQueue())
+        {
+            queue.offer("a");
+            queue.offer("b");
+
+            CachedQueue<String> clone = (CachedQueue<String>) queue.clone();
+
+            Assert.assertEquals("a", clone.poll());
+            clone.offer("c");
+            queue.offer("d");
+
+            Assert.assertEquals(Arrays.asList("b", "c"), new ArrayList<>(clone));
+
+            clone.close();
+
+            Assert.assertEquals(Arrays.asList("a", "b", "d"), new ArrayList<>(queue));
         }
     }
 }

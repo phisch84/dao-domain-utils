@@ -335,4 +335,60 @@ public class AbstractCachedQueueUT
         Assert.assertSame(failure, Assert.assertThrows(IllegalStateException.class, queue::clear).getCause());
         Assert.assertTrue(queue.isEmpty());
     }
+
+    /**
+     * Asserts that if cloning an element fails, clone closes the elements it already cloned, throws
+     * {@link CloneNotSupportedException} with the original exception as cause, and leaves the original unchanged.
+     */
+    @Test
+    public void testCloneWhenCloningAnElementFailsClosesClonedElements()
+    {
+        TestQueue queue = TestQueue.of("a", "b");
+        CloneNotSupportedException failure = new CloneNotSupportedException("injected");
+
+        queue.created.get(1).failOnClone = failure;
+
+        Assert.assertSame(failure, Assert.assertThrows(CloneNotSupportedException.class, queue::clone).getCause());
+        Assert.assertEquals(1, queue.created.get(0).clones.size());
+        Assert.assertTrue("the cloned element was not closed", queue.created.get(0).clones.get(0).closed);
+        Assert.assertFalse(queue.created.get(0).closed);
+        Assert.assertEquals(Arrays.asList("a", "b"), new ArrayList<>(queue));
+    }
+
+    /**
+     * Asserts that if cloning an element fails and closing the elements already cloned fails too, the failure of
+     * closing is added to the failure of cloning (the cause) as suppressed exception.
+     */
+    @Test
+    public void testCloneWhenCloningAndClosingFailAddsSuppressed()
+    {
+        TestQueue queue = TestQueue.of("a", "b");
+        CloneNotSupportedException cloneFailure = new CloneNotSupportedException("injected on clone");
+        IOException closeFailure = new IOException("injected on close");
+
+        queue.created.get(0).failOnCloseOfClones = closeFailure;
+        queue.created.get(1).failOnClone = cloneFailure;
+
+        Assert.assertSame(cloneFailure, Assert.assertThrows(CloneNotSupportedException.class, queue::clone).getCause());
+        Assert.assertArrayEquals(new Throwable[] { closeFailure }, cloneFailure.getSuppressed());
+    }
+
+    /**
+     * Asserts that clone skips an element which another thread removes (and closes) just while it is being cloned,
+     * like an iterator does.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testCloneSkipsElementRemovedMeanwhile() throws Exception
+    {
+        TestQueue queue = TestQueue.of("a", "b");
+
+        queue.created.get(0).beforeNextAccess = queue::poll;
+
+        AbstractCachedQueue<?> clone = (AbstractCachedQueue<?>) queue.clone();
+
+        Assert.assertEquals(Arrays.asList("b"), new ArrayList<>(clone));
+        Assert.assertEquals(Arrays.asList("b"), new ArrayList<>(queue));
+    }
 }

@@ -63,7 +63,8 @@ public class FailingCachedObject<V extends Serializable> implements CachedObject
     public int closeCalls;
 
     /**
-     * If not null, runs once at the start of the next {@link #get()} or {@link #commit()} (and is then reset to null).
+     * If not null, runs once at the start of the next {@link #get()}, {@link #commit()} or {@link #clone()}
+     * (and is then reset to null).
      * Lets a single-threaded test simulate another thread which acts just while this object is being read or saved,
      * e.g. removes it from its queue.
      */
@@ -136,6 +137,16 @@ public class FailingCachedObject<V extends Serializable> implements CachedObject
     @Override
     public Object clone() throws CloneNotSupportedException
     {
+        this.runBeforeNextAccess();
+
+        if (this.closed)
+        {
+            // like a real implementation, which can't read the value of a closed instance
+            CloneNotSupportedException closedFailure = new CloneNotSupportedException("closed");
+
+            closedFailure.initCause(new IllegalStateException("closed"));
+            throw closedFailure;
+        }
         if (this.failOnClone != null) throw this.failOnClone;
 
         FailingCachedObject<V> clone = new FailingCachedObject<>(this.value);
