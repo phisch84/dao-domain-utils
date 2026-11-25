@@ -3,6 +3,7 @@ package com.schoste.ddd.util.fs;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.NotSerializableException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.file.Files;
@@ -171,6 +172,37 @@ public class CachedObjectImplUT extends CachedObjectUT
         try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray())))
         {
             Assert.assertThrows(IllegalStateException.class, ois::readObject);
+        }
+    }
+
+    /**
+     * Asserts that if the object can't be written to the cache file (it isn't serializable), the constructor throws
+     * the failure and deletes the cache file it created, and doesn't leave it registered for deletion on exit.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testConstructorDeletesCacheFileIfWritingFails() throws Exception
+    {
+        File storage = Files.createTempDirectory("testConstructorDeletesCacheFileIfWritingFails").toFile();
+
+        try
+        {
+            ArrayList<Object> unsavable = new ArrayList<>();
+
+            unsavable.add(new Object());
+
+            Assert.assertThrows(NotSerializableException.class, () -> new CachedObjectImpl<ArrayList<Object>>(unsavable, storage.getPath()));
+            Assert.assertEquals(0, TestHelpers.countFiles(storage));
+
+            for (String registered : CachedObjectImpl.cacheFilesToDeleteOnExit)
+            {
+                Assert.assertFalse("still registered: " + registered, registered.startsWith(storage.getAbsolutePath()));
+            }
+        }
+        finally
+        {
+            TestHelpers.deleteRecursively(storage);
         }
     }
 

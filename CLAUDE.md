@@ -104,7 +104,8 @@ Checklist for a new utility or implementation:
 - `fs.CachedObjectImpl` creates each cache file atomically (`Files.createFile`, next name on
   `FileAlreadyExistsException`), so instances created concurrently in one folder (also by other JVMs) never
   share a file. Never check-then-create (`exists()` + write) or use fixed helper file names in the folder
-  (tested by `testConcurrentCreationInSameFolder`).
+  (tested by `testConcurrentCreationInSameFolder`). If writing the new file fails (e.g. not serializable), the
+  constructor deletes and unregisters it before rethrowing (`testConstructorDeletesCacheFileIfWritingFails`).
 - Serialization of `fs.CachedObjectImpl` writes only `cacheFilePath` and `objHashCode`, never the cached object.
   `readObject` loads the object once (into the weak reference).
 

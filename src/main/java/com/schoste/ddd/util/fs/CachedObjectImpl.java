@@ -83,6 +83,7 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
      * Creates a new cache file in the folder and writes the object into it.
      * The file is created atomically ({@link Files#createFile}), so concurrent callers,
      * also in other JVMs, never get the same file. Creating it also checks that the folder is writable.
+     * If writing fails (e.g. the object isn't serializable), the file is deleted again and the failure is thrown.
      */
     static private <T> File initializeCacheFile(String storagePath, T obj) throws IllegalArgumentException, Exception
     {
@@ -114,6 +115,17 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         }
         catch (Exception e)
         {
+            // the streams are closed here already, so the file can be deleted (also on Windows)
+            try
+            {
+                Files.deleteIfExists(cacheFile.toPath());
+                cacheFilesToDeleteOnExit.remove(cacheFile.getAbsolutePath());
+            }
+            catch (IOException deleteFailure)
+            {
+                // stays registered, so the shutdown hook deletes it
+                e.addSuppressed(deleteFailure);
+            }
             throw e;
         }
 
