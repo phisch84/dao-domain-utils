@@ -291,6 +291,9 @@ with the `read:packages` scope:
 </servers>
 ```
 
+Sources and Javadoc are published as well (`-sources.jar`, `-javadoc.jar`), so your IDE can show them;
+the usage rules of each type are in the Javadoc of its interface.
+
 ## Implementing another storage
 
 To store data somewhere else than in files (e.g. a database), implement the abstract classes:

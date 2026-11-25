@@ -17,6 +17,7 @@
         <maven-jar-plugin.version>3.5.0</maven-jar-plugin.version>
         <maven-surefire-plugin.version>3.5.5</maven-surefire-plugin.version>
         <maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
+        <maven-source-plugin.version>3.4.0</maven-source-plugin.version>
         <jacoco-maven-plugin.version>0.8.16</jacoco-maven-plugin.version>
         <pitest-maven.version>1.25.9</pitest-maven.version>
         <junit.version>4.13.2</junit.version>
@@ -88,9 +89,9 @@
 
         <plugins>
             <!--
-            Consumers of the library have no access to its source code, so the Javadoc is the documentation of its contract.
+            The Javadoc is the documentation of the library's contract (the usage rules are in the interfaces).
             The library publishes a Javadoc jar for its classes and one for its test classes
-            (the CachedObject contract tests are meant to be used by implementers of further CachedObject implementations).
+            (the contract tests are meant to be used by implementers of further storage implementations).
             doclint checks the Javadoc, and every finding fails the build:
             for the classes, broken HTML, broken references and missing documentation;
             for the test classes, everything except missing documentation (JUnit test classes need no comment for every element).
@@ -122,6 +123,26 @@
                         <configuration>
                             <doclint>all,-missing</doclint>
                         </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+            Publishes the sources of the classes (-sources.jar) and of the test classes (-test-sources.jar), so IDEs and
+            AI assistants in projects which use the library can read the contracts, the usage rules and the contract tests.
+            The no-fork goals attach the jars in the package phase without running the build a second time.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>${maven-source-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                            <goal>test-jar-no-fork</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>

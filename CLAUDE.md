@@ -303,3 +303,5 @@ Checklist for a new utility or implementation:
 
 - Deploys to GitHub Packages: `https://maven.pkg.github.com/phisch84/dao-domain-utils`.
 - `mvn deploy` needs a `<server>` with id `github` in `~/.m2/settings.xml` (token with `write:packages`).
+- Published artifacts: the jar, `-sources`, `-javadoc`, and for the contract tests `-tests`, `-test-sources`,
+  `-test-javadoc`. The sources jars let IDEs and AI assistants in consuming projects read the usage rules.
