@@ -9,6 +9,7 @@ import java.io.ObjectOutputStream;
 import java.io.ObjectStreamField;
 import java.io.Serializable;
 import java.lang.ref.WeakReference;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -70,28 +71,34 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         if (!Files.exists(_storagePath)) Files.createDirectories(_storagePath);
         if (!Files.isDirectory(_storagePath)) throw new IllegalArgumentException("storagePath");
 
-        Path testFile = Paths.get(_storagePath.toString(), AbstractCachedObject.class.getSimpleName());
-
-        Files.createFile(testFile);
-
-        if (!Files.exists(testFile)) throw new IllegalStateException();
-
-        Files.delete(testFile);
-
-        if (Files.exists(testFile)) throw new IllegalStateException();
-
         return _storagePath.toString();
     }
 
+    /**
+     * Creates a new cache file in the folder and writes the object into it.
+     * The file is created atomically ({@link Files#createFile}), so concurrent callers,
+     * also in other JVMs, never get the same file. Creating it also checks that the folder is writable.
+     */
     static private <T> File initializeCacheFile(String storagePath, T obj) throws IllegalArgumentException, Exception
     {
         if (obj == null) throw new IllegalArgumentException();
 
         long cacheFileName = System.currentTimeMillis();
+        File cacheFile = null;
 
-        while (Files.exists(Paths.get(storagePath.toString(), Long.toString(cacheFileName)))) cacheFileName++;
+        while (cacheFile == null)
+        {
+            Path candidate = Paths.get(storagePath, Long.toString(cacheFileName));
 
-        File cacheFile = Paths.get(storagePath.toString(), String.valueOf(cacheFileName)).toFile();
+            try
+            {
+                cacheFile = Files.createFile(candidate).toFile();
+            }
+            catch (FileAlreadyExistsException e)
+            {
+                cacheFileName++;
+            }
+        }
 
         cacheFilesToDeleteOnExit.add(cacheFile.getAbsolutePath());
 
