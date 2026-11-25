@@ -93,6 +93,47 @@ abstract public class NestedMapUT
     }
 
     /**
+     * Asserts that every put overload (1 to 5 keys) returns the previous value of its path.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testPutReturnsPreviousValueForEveryOverload() throws Exception
+    {
+        NestedMap<String, String> map = this.createNestedMap();
+
+        map.put("1", "old1");
+        map.put("1", "2", "old2");
+        map.put("1", "2", "3", "old3");
+        map.put("1", "2", "3", "4", "old4");
+        map.put("1", "2", "3", "4", "5", "old5");
+
+        Assert.assertEquals("old1", map.put("1", "new1"));
+        Assert.assertEquals("old2", map.put("1", "2", "new2"));
+        Assert.assertEquals("old3", map.put("1", "2", "3", "new3"));
+        Assert.assertEquals("old4", map.put("1", "2", "3", "4", "new4"));
+        Assert.assertEquals("old5", map.put("1", "2", "3", "4", "5", "new5"));
+    }
+
+    /**
+     * Asserts that a map whose values are all on deeper levels (none on the first level) is not empty,
+     * and neither is a sub map with values only below it.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testMapWithValuesOnlyOnDeeperLevelsIsNotEmpty() throws Exception
+    {
+        NestedMap<String, String> map = this.createNestedMap();
+
+        map.put("a", "b", "c", "v");
+
+        Assert.assertFalse(map.isEmpty());
+        Assert.assertFalse(map.getSubMap("a").isEmpty());
+        Assert.assertTrue(map.getSubMap("a", "b", "c").isEmpty());
+    }
+
+    /**
      * Asserts that a path can have a value and deeper keys at the same time,
      * and that get returns null for a path which has only deeper keys.
      *

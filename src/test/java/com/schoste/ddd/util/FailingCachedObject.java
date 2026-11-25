@@ -43,6 +43,11 @@ public class FailingCachedObject<V extends Serializable> implements CachedObject
     public CloneNotSupportedException failOnClone;
 
     /**
+     * Passed to {@link #failOnClose} of every clone created by {@link #clone()}.
+     */
+    public IOException failOnCloseOfClones;
+
+    /**
      * How often {@link #commit()} was called, also if it failed.
      */
     public int commitCalls;
@@ -107,6 +112,7 @@ public class FailingCachedObject<V extends Serializable> implements CachedObject
 
         FailingCachedObject<V> clone = new FailingCachedObject<>(this.value);
 
+        clone.failOnClose = this.failOnCloseOfClones;
         this.clones.add(clone);
 
         return clone;

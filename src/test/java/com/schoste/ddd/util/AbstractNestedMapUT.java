@@ -15,11 +15,16 @@ import org.junit.Test;
 public class AbstractNestedMapUT
 {
     /**
-     * A {@link HashMap} whose {@link #put(Object, Object)} and {@link #clear()} can be made to fail.
+     * A {@link HashMap} whose {@link #get(Object)}, {@link #put(Object, Object)} and {@link #clear()} can be made to fail.
      */
     static class FailingHashMap extends HashMap<String, String>
     {
         private static final long serialVersionUID = 1L;
+
+        /**
+         * If not null, {@link #get(Object)} throws it.
+         */
+        RuntimeException failOnGet;
 
         /**
          * If not null, {@link #put(Object, Object)} throws it.
@@ -30,6 +35,14 @@ public class AbstractNestedMapUT
          * If not null, {@link #clear()} throws it.
          */
         RuntimeException failOnClear;
+
+        @Override
+        public String get(Object key)
+        {
+            if (this.failOnGet != null) throw this.failOnGet;
+
+            return super.get(key);
+        }
 
         @Override
         public String put(String key, String value)
@@ -254,5 +267,26 @@ public class AbstractNestedMapUT
         Assert.assertEquals(TestHelpers.set("b"), testMap.keySet());
         Assert.assertEquals("1", testMap.get("b", "x"));
         Assert.assertEquals(1, testMap.size());
+    }
+
+    /**
+     * Asserts that {@link AbstractNestedMap#equals(Object)} returns false, instead of throwing, if the other map
+     * rejects a key path of this map with {@link ClassCastException} or {@link NullPointerException}
+     * (like {@link java.util.AbstractMap#equals(Object)}).
+     */
+    @Test
+    public void testEqualsIsFalseIfTheOtherMapRejectsAKey()
+    {
+        for (RuntimeException rejection : new RuntimeException[] { new ClassCastException("injected"), new NullPointerException("injected") })
+        {
+            TestNestedMap testMap = new TestNestedMap();
+            TestNestedMap other = new TestNestedMap();
+
+            testMap.put("a", "1");
+            other.put("a", "1");
+            other.created.get(0).failOnGet = rejection;
+
+            Assert.assertNotEquals(testMap, other);
+        }
     }
 }

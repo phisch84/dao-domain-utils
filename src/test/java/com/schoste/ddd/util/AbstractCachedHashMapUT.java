@@ -35,6 +35,11 @@ public class AbstractCachedHashMapUT
         Exception failOnCommit;
 
         /**
+         * Passed to {@link FailingCachedObject#failOnClose} of every new cached object.
+         */
+        IOException failOnClose;
+
+        /**
          * Every cached object this map created, in order.
          */
         final List<FailingCachedObject<String>> created = new ArrayList<>();
@@ -47,6 +52,7 @@ public class AbstractCachedHashMapUT
             FailingCachedObject<String> cachedValue = new FailingCachedObject<>(value);
 
             cachedValue.failOnCommit = this.failOnCommit;
+            cachedValue.failOnClose = this.failOnClose;
             this.created.add(cachedValue);
 
             return cachedValue;
@@ -274,5 +280,52 @@ public class AbstractCachedHashMapUT
         Assert.assertFalse(testMap.cachedValueOf("b").closed);
         Assert.assertEquals("1", testMap.get("a"));
         Assert.assertEquals("2", testMap.get("b"));
+    }
+
+    /**
+     * Asserts that if saving a new value fails and closing it fails too, {@link AbstractCachedHashMap#put(Object, Object)}
+     * throws the failure of saving (as cause of the {@link IllegalStateException}) with the failure of closing
+     * as suppressed exception.
+     */
+    @Test
+    public void testPutWhenCommitAndCloseFailAddsSuppressed()
+    {
+        TestMap testMap = new TestMap();
+        IOException commitFailure = new IOException("injected on commit");
+        IOException closeFailure = new IOException("injected on close");
+
+        testMap.failOnCommit = commitFailure;
+        testMap.failOnClose = closeFailure;
+
+        IllegalStateException thrown = Assert.assertThrows(IllegalStateException.class, () -> testMap.put("key", "value"));
+
+        Assert.assertSame(commitFailure, thrown.getCause());
+        Assert.assertArrayEquals(new Throwable[] { closeFailure }, commitFailure.getSuppressed());
+        Assert.assertTrue(testMap.isEmpty());
+    }
+
+    /**
+     * Asserts that if cloning a value fails and closing the values already cloned fails too,
+     * {@link AbstractCachedHashMap#clone()} throws {@link CloneNotSupportedException} whose cause (the failure of
+     * cloning) has the failure of closing as suppressed exception.
+     */
+    @Test
+    public void testCloneWhenCloningAndClosingFailAddsSuppressed()
+    {
+        TestMap testMap = new TestMap();
+        CloneNotSupportedException cloneFailure = new CloneNotSupportedException("injected on clone");
+        IOException closeFailure = new IOException("injected on close");
+
+        testMap.put("a", "1");
+        testMap.put("b", "2");
+
+        // a HashMap iterates in hash order: "a" is cloned (and its clone fails on close) before "b", which fails
+        testMap.cachedValueOf("a").failOnCloseOfClones = closeFailure;
+        testMap.cachedValueOf("b").failOnClone = cloneFailure;
+
+        CloneNotSupportedException thrown = Assert.assertThrows(CloneNotSupportedException.class, testMap::clone);
+
+        Assert.assertSame(cloneFailure, thrown.getCause());
+        Assert.assertArrayEquals(new Throwable[] { closeFailure }, cloneFailure.getSuppressed());
     }
 }

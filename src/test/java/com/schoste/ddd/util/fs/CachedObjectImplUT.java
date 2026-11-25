@@ -7,6 +7,7 @@ import java.io.NotSerializableException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.PrintStream;
+import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -235,6 +236,38 @@ public class CachedObjectImplUT extends CachedObjectUT
         }
 
         Assert.assertEquals("", err.toString());
+    }
+
+    /**
+     * A serializable value without its own {@link Object#hashCode()}: its hash code is the identity hash code,
+     * so a copy loaded from the cache file has another hash code than the original instance.
+     */
+    static class IdentityValue implements Serializable
+    {
+        private static final long serialVersionUID = 1L;
+    }
+
+    /**
+     * Asserts that a deserialized instance keeps the hash code which the object had when the original instance was
+     * created, also if the loaded object has another hash code: serialization writes the hash code (see
+     * {@link CachedObjectImpl#hashCode()}). An {@link IdentityValue} makes the difference visible.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testDeserializedInstanceKeepsOriginalHashCode() throws Exception
+    {
+        IdentityValue value = new IdentityValue();
+
+        try (CachedObjectImpl<IdentityValue> testObj = new CachedObjectImpl<IdentityValue>(value))
+        {
+            CachedObjectImpl<IdentityValue> deserializedObj = TestHelpers.serializeAndDeserialize(testObj);
+
+            Assert.assertNotEquals("the loaded copy must have another hash code",
+                                   value.hashCode(), deserializedObj.get().hashCode());
+            Assert.assertEquals(value.hashCode(), testObj.hashCode());
+            Assert.assertEquals(value.hashCode(), deserializedObj.hashCode());
+        }
     }
 
     /**

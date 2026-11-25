@@ -651,6 +651,7 @@ abstract public class CachedHashMapUT
 
             Assert.assertEquals(expected, new HashMap<>(testMap));
             Assert.assertEquals(expected.keySet(), testMap.keySet());
+            Assert.assertEquals(2, testMap.entrySet().size());
         }
     }
 

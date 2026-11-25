@@ -29,6 +29,11 @@ User-facing documentation is in `README.md`; the contract of each class is its J
   `mutations.csv` (one line per mutant: file, class, mutator, method, line, status, killing test). After adding tests,
   run it and look at the lines whose status isn't `KILLED`; a surviving mutant is a change no test notices.
   Instead of the hand-written `sed` mutations, use it to check that new tests can fail.
+  Accepted survivors (equivalent or not testable; don't write tests for them), all others must be killed:
+  - `CachedObjectImpl.initializeCacheFile`: `cacheFileName++` → `--` (counting down also finds a free name), and the
+    suppressed delete failure (the file system can't be made to refuse a delete in a test).
+  - `AbstractNestedMap.prune`: `i >= 0` → `i > 0` (an empty value map stays on the root; invisible through the API).
+  - `AbstractNestedMap.SubMap.createValueMap`: never called (see its comment).
 - Use `clean` when results look odd: the IDE (VS Code Java / Eclipse compiler) also compiles into `target/`,
   and Maven then runs stale classes ("Unresolved compilation problem").
 - CI (`.github/workflows/build.yml`) runs `mvn -B verify` on JDK 21 and 25 for every push and pull request.
