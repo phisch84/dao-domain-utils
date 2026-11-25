@@ -15,6 +15,8 @@ import org.junit.Test;
 import static com.schoste.ddd.util.TestHelpers.countFiles;
 import static com.schoste.ddd.util.TestHelpers.serializeAndDeserialize;
 
+import com.schoste.ddd.util.AbstractCachedHashMap;
+import com.schoste.ddd.util.CachedObject;
 import com.schoste.ddd.util.CachedNestedMap;
 import com.schoste.ddd.util.CachedNestedMapUT;
 import com.schoste.ddd.util.TestHelpers;
@@ -229,6 +231,74 @@ public class CachedNestedHashMapImplUT extends CachedNestedMapUT
             this.created.add(valueMap);
 
             return valueMap;
+        }
+    }
+
+    /**
+     * A {@link com.schoste.ddd.util.CachedHashMap} which is no {@link CachedHashMapImpl}:
+     * it derives from {@link AbstractCachedHashMap} directly and stores each value with a {@link CachedObjectImpl}.
+     */
+    static class OtherValueMap extends AbstractCachedHashMap<String, String>
+    {
+        private static final long serialVersionUID = 1L;
+
+        private final String storagePath;
+
+        OtherValueMap(String storagePath)
+        {
+            this.storagePath = storagePath;
+        }
+
+        @Override
+        protected CachedObject<String> createCachedObject(String value) throws Exception
+        {
+            return new CachedObjectImpl<String>(value, this.storagePath);
+        }
+    }
+
+    /**
+     * Asserts that {@link CachedNestedHashMapImpl#commit()}, {@link CachedNestedHashMapImpl#clone()} and
+     * {@link CachedNestedHashMapImpl#close()} work with any {@link com.schoste.ddd.util.CachedHashMap} as value map
+     * (here {@link OtherValueMap}), not only with {@link CachedHashMapImpl}.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testWorksWithOtherCachedHashMaps() throws Exception
+    {
+        File storage = Files.createTempDirectory(CachedNestedHashMapImplUT.class.getSimpleName()).toFile();
+
+        try
+        {
+            CachedNestedHashMapImpl<String, String> map = new CachedNestedHashMapImpl<String, String>(storage.getAbsolutePath())
+            {
+                private static final long serialVersionUID = 1L;
+
+                @Override
+                protected Map<String, String> createValueMap()
+                {
+                    return new OtherValueMap(this.storagePath);
+                }
+            };
+
+            map.put("a", "1");
+            map.put("b", "x", "2");
+            map.commit();
+
+            CachedNestedHashMapImpl<String, String> clone = (CachedNestedHashMapImpl<String, String>) map.clone();
+
+            Assert.assertEquals(4, countFiles(storage));
+            Assert.assertEquals("2", clone.get("b", "x"));
+
+            clone.close();
+            map.close();
+
+            Assert.assertEquals(0, countFiles(storage));
+        }
+        finally
+        {
+            TestHelpers.deleteRecursively(storage);
         }
     }
 

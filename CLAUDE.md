@@ -155,9 +155,13 @@ Checklist for a new utility or implementation:
   path gives an empty view; `put` through it creates the path. `clear()` on a view keeps the value at its path.
 - **Pruning**: `remove`/`clear` remove levels left without values and children (never the root); empty value maps are
   dropped (set to null). A `put` whose value map throws prunes the path too, so it leaves no empty levels
-  (tested by `AbstractNestedMapUT` and `testPutOfUnsavableValueLeavesMapUnchanged`). `clear` empties every value map below, which frees cached storage.
+  (tested by `AbstractNestedMapUT` and `testPutOfUnsavableValueLeavesMapUnchanged`).
+  `clear` empties every value map below, which frees cached storage.
 - `CachedNestedMap`: `commit()`/`close()` act on the whole map (via `getValueMaps()`); `getSubMap` returns a plain
-  `NestedMap`. `close()` closes every level's `CachedHashMapImpl` (first `IOException` thrown, others suppressed).
+  `NestedMap`. `close()` closes every level's value map (first `IOException` thrown, others suppressed).
+- `CachedNestedHashMapImpl` uses its value maps only through the `CachedHashMap` interface (never casts to
+  `CachedHashMapImpl`), so a subclass may return any `CachedHashMap` from `createValueMap()`
+  (tested by `testWorksWithOtherCachedHashMaps`).
 - **Serialization**: levels and value maps are serialized as they are (cached: references only, shared cache files).
   A serialized sub map includes its owner. Keys/values have no `Serializable` bound in `NestedMap`.
 - **`clone()`**: `super.clone()` + copy every level with `cloneValueMap(Map)` (default: new value map + `putAll`, i.e.

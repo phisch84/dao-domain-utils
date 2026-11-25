@@ -5,6 +5,7 @@ import java.io.Serializable;
 import java.util.Map;
 
 import com.schoste.ddd.util.AbstractNestedMap;
+import com.schoste.ddd.util.CachedHashMap;
 import com.schoste.ddd.util.CachedNestedMap;
 
 /**
@@ -53,6 +54,8 @@ public class CachedNestedHashMapImpl<K, V extends Serializable> extends Abstract
 
     /**
      * Creates a {@link com.schoste.ddd.util.fs.CachedHashMapImpl} in the storage path for the values of a level.
+     * Deriving classes may override it, but must return a {@link com.schoste.ddd.util.CachedHashMap}, because
+     * {@link #commit()}, {@link #close()} and {@link #cloneValueMap(Map)} use its methods.
      *
      * @return a new, empty {@link com.schoste.ddd.util.fs.CachedHashMapImpl}
      */
@@ -63,7 +66,7 @@ public class CachedNestedHashMapImpl<K, V extends Serializable> extends Abstract
     }
 
     /**
-     * Clones the {@link com.schoste.ddd.util.fs.CachedHashMapImpl} of a level (see
+     * Clones the {@link com.schoste.ddd.util.CachedHashMap} of a level (see
      * {@link com.schoste.ddd.util.CachedHashMap#clone()}), so the clone has its own cache files and instances
      * with the current state of the values.
      *
@@ -75,7 +78,7 @@ public class CachedNestedHashMapImpl<K, V extends Serializable> extends Abstract
     @Override
     protected Map<K, V> cloneValueMap(Map<K, V> valueMap) throws CloneNotSupportedException
     {
-        return (Map<K, V>) ((CachedHashMapImpl<K, V>) valueMap).clone();
+        return (Map<K, V>) ((CachedHashMap<K, V>) valueMap).clone();
     }
 
     /**
@@ -88,12 +91,12 @@ public class CachedNestedHashMapImpl<K, V extends Serializable> extends Abstract
     {
         for (Map<K, V> valueMap : this.getValueMaps())
         {
-            ((CachedHashMapImpl<K, V>) valueMap).commit();
+            ((CachedHashMap<K, V>) valueMap).commit();
         }
     }
 
     /**
-     * Closes the {@link com.schoste.ddd.util.fs.CachedHashMapImpl} of every level, which deletes the cache files
+     * Closes the {@link com.schoste.ddd.util.CachedHashMap} of every level, which deletes the cache files
      * of all values, and empties the map. It tries to close every level; the first {@link IOException} is thrown
      * with the others added as suppressed exceptions.
      *
@@ -108,7 +111,7 @@ public class CachedNestedHashMapImpl<K, V extends Serializable> extends Abstract
         {
             try
             {
-                ((CachedHashMapImpl<K, V>) valueMap).close();
+                ((CachedHashMap<K, V>) valueMap).close();
             }
             catch (IOException e)
             {
