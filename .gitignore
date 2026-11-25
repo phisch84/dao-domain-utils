@@ -84,3 +84,8 @@ buildNumber.properties
 .flattened-pom.xml
 
 # End of https://www.gitignore.io/api/maven,eclipse
+
+### Project ###
+# Cache files of CachedObjectImpl (named by a 13-digit timestamp). A PIT mutant can make a test write one into the
+# working directory (the repo root); they must never be committed.
+/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]
