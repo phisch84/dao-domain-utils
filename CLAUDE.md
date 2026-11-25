@@ -3,13 +3,14 @@
 Helper library for the DDD libraries [dao](https://github.com/phisch84/dao) and
 [domain-repository](https://github.com/phisch84/domain-repository): code that fits none of the
 infrastructure, domain or application layers. It provides memory-saving holders whose data lives in a
-storage and is kept in memory only weakly, a map with key paths, and a thread-safe queue:
+storage and is kept in memory only weakly, a map with key paths, a thread-safe queue, and online statistics:
 
 - `CachedObject<T>`: one `Serializable` object, reloaded from storage on demand.
 - `CachedHashMap<K, V>`: a `java.util.Map` whose keys stay in memory and whose values are each a `CachedObject`.
 - `NestedMap<K, V>`: a map of maps (trie): `put(k1, k2, k3, v)`, `get(k1, k2, k3)`, `getSubMap(k1)`.
   `NestedHashMap` is in memory; `CachedNestedMap` / `fs.CachedNestedHashMapImpl` caches the values.
 - `CachedQueue<E>`: a thread-safe FIFO `java.util.Queue` whose elements are each a `CachedObject`.
+- `RunningStatistics`: thread-safe count, sum, min, max, mean, variance and standard deviation, one data point at a time.
 
 User-facing documentation is in `README.md`; the contract of each class is its Javadoc.
 
@@ -66,6 +67,7 @@ User-facing documentation is in `README.md`; the contract of each class is its J
 | `src/main/java/com/schoste/ddd/util/CachedQueue.java` | Interface + usage rules of the thread-safe queue, adds `commit()` and `clone()` |
 | `src/main/java/com/schoste/ddd/util/AbstractCachedQueue.java` | All queue logic (extends `java.util.AbstractQueue`, lock, snapshot iterator); subclasses implement `createCachedObject(E)` |
 | `src/main/java/com/schoste/ddd/util/fs/CachedQueueImpl.java` | Creates a `CachedObjectImpl` per element in `storagePath` |
+| `src/main/java/com/schoste/ddd/util/RunningStatistics.java` | Online statistics (Welford, Chan, Kahan sum); one class, no storage |
 | `src/test/java/com/schoste/ddd/util/CachedObjectUT.java` | Contract test for every `CachedObject` implementation |
 | `src/test/java/com/schoste/ddd/util/CachedHashMapUT.java` | Contract test for every `CachedHashMap` implementation |
 | `src/test/java/com/schoste/ddd/util/AbstractCachedHashMapUT.java` | Storage errors of `AbstractCachedHashMap` (with `FailingCachedObject`) |
@@ -77,6 +79,7 @@ User-facing documentation is in `README.md`; the contract of each class is its J
 | `src/test/java/com/schoste/ddd/util/NestedHashMapUT.java` | Factory for `NestedMapUT` + `NestedHashMap` specific tests |
 | `src/test/java/com/schoste/ddd/util/CachedQueueUT.java` | Contract test for every `CachedQueue` (incl. a concurrency stress test) |
 | `src/test/java/com/schoste/ddd/util/AbstractCachedQueueUT.java` | Storage errors and races of `AbstractCachedQueue` (with `FailingCachedObject`), lock release |
+| `src/test/java/com/schoste/ddd/util/RunningStatisticsUT.java` | Tests of `RunningStatistics` (accuracy, combine, concurrency); a plain test class |
 | `src/test/java/com/schoste/ddd/util/fs/*ImplUT.java` | Factories for the contract tests + file-system specific tests |
 
 ## Architecture pattern (follow it for every new utility)
@@ -89,6 +92,9 @@ User-facing documentation is in `README.md`; the contract of each class is its J
    and per implementation a subclass `<sub-package>/*ImplUT` that implements the factories and adds
    implementation-specific tests. Contract tests may use protected fields (same package) and skip with
    `Assume` for implementations that don't derive from the `Abstract*` class.
+
+Exception: a utility **without storage** (e.g. `RunningStatistics`) is one class in `com.schoste.ddd.util`, without
+interface, `Abstract*` class or `fs` implementation, and its test is a plain `*UT` class (no abstract contract test).
 
 Checklist for a new utility or implementation:
 
@@ -234,6 +240,30 @@ Checklist for a new utility or implementation:
   holding the lock; `lock` is `transient` and recreated in `readObject`.
 - **`clone()`**: `super.clone()` + own lock + a clone of every `CachedObject` from a snapshot (skips elements removed
   meanwhile); on failure the clones are closed and `CloneNotSupportedException` (with cause) is thrown.
+
+### RunningStatistics
+
+- One class in `com.schoste.ddd.util`, without interface, `Abstract*` class or `fs` implementation: it has no storage
+  (see the exception in the architecture pattern). Named "running" (the usual term for running mean/variance);
+  "online" reads like network, "streaming" like `java.util.stream`.
+- **Not a subclass of `java.util.DoubleSummaryStatistics`**: its `combine(DoubleSummaryStatistics)` can't merge a
+  variance (a plain one has none), its `getAverage` (sum/count) differs from Welford's mean in the last digits, it isn't
+  `Serializable`, and Java 8 has no constructor to restore its state. Instead `implements DoubleConsumer, Serializable,
+  Cloneable` with the same method names (`getMean` for `getAverage`), so `collect(new, accept, combine)` works.
+- **Only `double`** (decided against `N extends Number`): `Number` has no arithmetic, so a type parameter would only box
+  every value and suggest a precision it doesn't have; exact types would need a separate `BigDecimal` implementation, and
+  Java 8 has no `BigDecimal.sqrt`. The Javadoc explains the 2^53 limit and the base-value workaround.
+- **Algorithms**: Welford for `accept` (mean + sum of squared deviations), Chan et al. for `combine`; the sum is
+  Kahan-compensated like `DoubleSummaryStatistics` (`simpleSum` is returned when the compensated sum of infinities is NaN).
+- **Undefined values are NaN** (mean and population variance of 0 values, sample variance of fewer than 2), not 0;
+  sum/min/max of 0 values like `DoubleSummaryStatistics` (0, +Infinity, -Infinity).
+- **Thread-safe** with `synchronized` on the instance (cheap operations, no I/O). `combine` copies the other with
+  `clone()` (holding only the other's lock), then merges under its own lock: never two locks, no deadlock
+  (`testConcurrentAcceptCombineAndSnapshots` times out if `combine` is made `synchronized`). `toString` formats a
+  `clone()` snapshot with `Locale.ROOT` (decimal point everywhere, unlike `DoubleSummaryStatistics`).
+- `writeObject` holds the lock; `equals`/`hashCode` are identity.
+- Tests compare with an exact `BigDecimal` two-pass computation, use 1e9 + {4, 7, 13, 16} for accuracy, and data whose
+  correct rounding is known exactly for the compensated sum (compared without tolerance).
 
 ## Code and Javadoc rules
 

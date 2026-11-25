@@ -13,6 +13,7 @@ Requires Java 8 or newer. No runtime dependencies.
 | [`NestedMap<K, V>`](#nestedmap) | A map of maps (a trie): a value is stored under a path of keys, e.g. `put("a", "b", "c", value)` |
 | [`CachedNestedMap<K, V>`](#cachednestedmap) | A `NestedMap` whose values are cached like in a `CachedHashMap` |
 | [`CachedQueue<E>`](#cachedqueue) | A thread-safe FIFO `java.util.Queue` whose elements are each kept in a `CachedObject` |
+| [`RunningStatistics`](#runningstatistics) | Thread-safe count, sum, min, max, mean, variance and standard deviation of data points, computed one at a time |
 
 The cached types come with a file system implementation in the package `com.schoste.ddd.util.fs`;
 `NestedHashMap` is the in-memory `NestedMap`.
@@ -255,6 +256,48 @@ try (CachedQueue<ArrayList<String>> queue = new CachedQueueImpl<>("/var/cache/my
 - **Serializing writes only references** (the paths of the cache files). Call `commit()` before serializing;
   the deserialized queue shares the cache files with the original.
 - **Storage errors** are thrown as `IllegalStateException` with the original exception as cause.
+
+## RunningStatistics
+
+`RunningStatistics` computes statistics of an unknown number of data points online, one data point at a time,
+without keeping the data points: count, sum, minimum, maximum, mean, and the variance and standard deviation of the
+population and of the sample. It uses Welford's algorithm, which stays accurate also for many data points and for large
+values with a small spread. It works like `java.util.DoubleSummaryStatistics`, also with streams.
+
+```java
+import com.schoste.ddd.util.RunningStatistics;
+
+RunningStatistics stats = new RunningStatistics();
+
+stats.accept(2.0);
+stats.accept(4.0);
+stats.accept(9.0);
+
+stats.getMean();                     // 5.0
+stats.getPopulationVariance();       // 8.666...: sum of squared deviations / count
+stats.getSampleVariance();           // 13.0: sum of squared deviations / (count - 1)
+stats.getSampleStandardDeviation();  // 3.605...
+
+// in parts (e.g. in parallel), then combined:
+RunningStatistics all = values.parallelStream().mapToDouble(Double::doubleValue)
+                              .collect(RunningStatistics::new, RunningStatistics::accept, RunningStatistics::combine);
+```
+
+### Rules
+
+- **Undefined values are `NaN`**: the mean and the population variance of no data points, and the sample variance of
+  fewer than two. As for `DoubleSummaryStatistics`, the sum of no data points is 0, the minimum is `+Infinity` and the
+  maximum is `-Infinity`. `NaN` and infinite data points spread into the results by the rules of floating-point arithmetic.
+- **Data points are `double`s**: `int`, `long` and `float` values widen automatically, other `Number`s via `doubleValue()`.
+  A `double` holds integers exactly only up to 2<sup>53</sup>; for larger `long` values (e.g. timestamps in nanoseconds),
+  add the differences to a base value: the variances stay the same, and the mean is the base plus the mean of the differences.
+- **`combine()`** adds the data points of another instance; the result equals accepting all of them in one instance,
+  up to rounding.
+- **Thread-safe**: every method sees a consistent state. Calls in a row may see data points added by other threads in
+  between; `clone()` gives a consistent snapshot. `combine()` never holds two locks, so it can't deadlock.
+- **Serializable and cloneable**; `equals()` and `hashCode()` are identity, like for `DoubleSummaryStatistics`.
+- It is **not** a `DoubleSummaryStatistics`: that class can't be combined with statistics that have a variance and isn't
+  serializable. The method names match (`accept`, `getCount`, `getSum`, `getMin`, `getMax`), with `getMean` for `getAverage`.
 
 ## Installation
 
