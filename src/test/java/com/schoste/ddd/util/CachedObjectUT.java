@@ -259,6 +259,99 @@ abstract public class CachedObjectUT
     }
 
     /**
+     * Asserts that {@link CachedObject#get()} and {@link CachedObject#commit()} throw {@link IllegalStateException}
+     * after {@link CachedObject#close()}.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testGetAndCommitAfterCloseAreRejected() throws Exception
+    {
+        CachedObject<String> testObj = this.createCachedObj("testGetAndCommitAfterCloseAreRejected");
+
+        testObj.close();
+
+        Assert.assertThrows(IllegalStateException.class, testObj::get);
+        Assert.assertThrows(IllegalStateException.class, testObj::commit);
+    }
+
+    /**
+     * Asserts that calling {@link CachedObject#close()} a second time does nothing (and doesn't throw).
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testCloseTwiceDoesNothing() throws Exception
+    {
+        CachedObject<String> testObj = this.createCachedObj("testCloseTwiceDoesNothing");
+
+        testObj.close();
+        testObj.close();
+
+        Assert.assertThrows(IllegalStateException.class, testObj::get);
+    }
+
+    /**
+     * Asserts that {@link CachedObject#hashCode()} still returns the hash code of the cached object
+     * after {@link CachedObject#close()}, because it never reads from the storage.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testHashCodeAfterClose() throws Exception
+    {
+        String objToCache = "testHashCodeAfterClose";
+        CachedObject<String> testObj = this.createCachedObj(objToCache);
+
+        testObj.close();
+
+        Assert.assertEquals(objToCache.hashCode(), testObj.hashCode());
+    }
+
+    /**
+     * Asserts that {@link CachedObject#equals(Object)} is false for null, for an object which is no
+     * {@link CachedObject} (also not the cached object itself) and for a cached object with an unequal object.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testEqualsWithNullOtherTypeAndOtherObjectIsFalse() throws Exception
+    {
+        String objToCache = "testEqualsWithNullOtherTypeAndOtherObjectIsFalse";
+
+        try (CachedObject<String> testObj = this.createCachedObj(objToCache);
+             CachedObject<String> otherObj = this.createCachedObj("other"))
+        {
+            Assert.assertFalse(testObj.equals(null));
+            Assert.assertFalse(testObj.equals(objToCache));
+            Assert.assertFalse(testObj.equals(otherObj));
+            Assert.assertFalse(otherObj.equals(testObj));
+        }
+    }
+
+    /**
+     * Asserts that {@link CachedObject#equals(Object)} is false (and doesn't throw)
+     * if one of the two instances was closed, because its object can't be read anymore.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testEqualsWithClosedInstanceIsFalse() throws Exception
+    {
+        String objToCache = "testEqualsWithClosedInstanceIsFalse";
+
+        try (CachedObject<String> testObj = this.createCachedObj(objToCache))
+        {
+            CachedObject<String> closedObj = this.createCachedObj(objToCache);
+
+            closedObj.close();
+
+            Assert.assertFalse(testObj.equals(closedObj));
+            Assert.assertFalse(closedObj.equals(testObj));
+        }
+    }
+
+    /**
      * An operation on a cached object, which may throw any exception.
      */
     @FunctionalInterface

@@ -258,9 +258,12 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         this.objHashCode = object.hashCode();
     }
 
-    /**    (non-Javadoc)
+    /**
+     * Deletes the cache file; afterwards {@link #get()} and {@link #commit()} throw {@link IllegalStateException}.
+     * Does nothing if the instance was already closed or was never initialized (see {@link #CachedObjectImpl()}).
      *
      * @see java.io.Closeable#close()
+     * @throws IOException never thrown by this implementation; declared by {@link java.io.Closeable#close()}
      */
     @Override
     public void close() throws IOException
@@ -268,6 +271,9 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         synchronized (this.objRefLock)
         {
             this.objRef = null;
+
+            if (this.cacheFile == null) return;
+
             this.cacheFile.delete();
 
             cacheFilesToDeleteOnExit.remove(this.cacheFilePath);

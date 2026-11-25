@@ -1,6 +1,10 @@
 package com.schoste.ddd.util.fs;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -64,6 +68,111 @@ public class CachedObjectImplUT extends CachedObjectUT
 
             Assert.assertFalse(CachedObjectImpl.cacheFilesToDeleteOnExit.contains(obj.cacheFilePath));
             Assert.assertFalse(new File(obj.cacheFilePath).exists());
+        }
+    }
+
+    /**
+     * Asserts that the constructors reject a null object and a null storage path with {@link IllegalArgumentException}.
+     */
+    @Test
+    public void testNullArgumentsAreRejected()
+    {
+        String tmpDir = System.getProperty("java.io.tmpdir");
+
+        Assert.assertThrows(IllegalArgumentException.class, () -> new CachedObjectImpl<String>((String) null));
+        Assert.assertThrows(IllegalArgumentException.class, () -> new CachedObjectImpl<String>(null, tmpDir));
+        Assert.assertThrows(IllegalArgumentException.class, () -> new CachedObjectImpl<String>("object", null));
+    }
+
+    /**
+     * Asserts that a storage path which is a file (not a folder) is rejected with {@link IllegalArgumentException}.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testStoragePathWhichIsAFileIsRejected() throws Exception
+    {
+        Path file = Files.createTempFile("testStoragePathWhichIsAFileIsRejected", null);
+
+        try
+        {
+            Assert.assertThrows(IllegalArgumentException.class, () -> new CachedObjectImpl<String>("object", file.toString()));
+        }
+        finally
+        {
+            Files.delete(file);
+        }
+    }
+
+    /**
+     * Asserts that a storage path which doesn't exist is created, including missing parent folders,
+     * and that the cache file is stored in it.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testMissingStoragePathIsCreated() throws Exception
+    {
+        Path tempDir = Files.createTempDirectory("testMissingStoragePathIsCreated");
+        Path storagePath = tempDir.resolve("parent").resolve("storage");
+
+        try
+        {
+            try (CachedObjectImpl<String> testObj = new CachedObjectImpl<String>("object", storagePath.toString()))
+            {
+                Assert.assertTrue(Files.isDirectory(storagePath));
+                Assert.assertEquals(storagePath.toFile().getAbsoluteFile(), new File(testObj.cacheFilePath).getParentFile());
+            }
+        }
+        finally
+        {
+            Files.deleteIfExists(storagePath);
+            Files.deleteIfExists(storagePath.getParent());
+            Files.delete(tempDir);
+        }
+    }
+
+    /**
+     * Asserts that an instance created with the constructor for serialization, which was never initialized,
+     * throws {@link IllegalStateException} for {@link CachedObjectImpl#get()}, {@link CachedObjectImpl#commit()}
+     * and {@link CachedObjectImpl#hashCode()}, and that {@link CachedObjectImpl#close()} does nothing.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testUninitializedInstance() throws Exception
+    {
+        CachedObjectImpl<String> testObj = new CachedObjectImpl<String>();
+
+        Assert.assertThrows(IllegalStateException.class, testObj::get);
+        Assert.assertThrows(IllegalStateException.class, testObj::commit);
+        Assert.assertThrows(IllegalStateException.class, testObj::hashCode);
+
+        testObj.close();
+    }
+
+    /**
+     * Asserts that an instance can't be deserialized after the original was closed,
+     * because its cache file was deleted: deserializing throws {@link IllegalStateException}.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testDeserializeAfterCloseIsRejected() throws Exception
+    {
+        CachedObjectImpl<String> testObj = new CachedObjectImpl<String>("testDeserializeAfterCloseIsRejected");
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+
+        try (ObjectOutputStream oos = new ObjectOutputStream(bytes))
+        {
+            oos.writeObject(testObj);
+        }
+
+        testObj.close();
+
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray())))
+        {
+            Assert.assertThrows(IllegalStateException.class, ois::readObject);
         }
     }
 
