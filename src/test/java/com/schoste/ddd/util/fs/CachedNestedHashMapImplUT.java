@@ -1,8 +1,13 @@
 package com.schoste.ddd.util.fs;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.Serializable;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -154,6 +159,155 @@ public class CachedNestedHashMapImplUT extends CachedNestedMapUT
             clone.close();
 
             Assert.assertEquals(3, countFiles(storage));
+        }
+        finally
+        {
+            for (File file : storage.listFiles()) file.delete();
+
+            storage.delete();
+        }
+    }
+
+    /**
+     * A value map whose {@link #close()} and {@link #clone()} can be made to fail.
+     */
+    static class FailingValueMap extends CachedHashMapImpl<String, String>
+    {
+        private static final long serialVersionUID = 1L;
+
+        /**
+         * If not null, {@link #close()} throws it without closing the values.
+         */
+        IOException failOnClose;
+
+        /**
+         * If not null, {@link #clone()} throws it.
+         */
+        CloneNotSupportedException failOnClone;
+
+        /**
+         * True once {@link #close()} was called, also if it failed.
+         */
+        boolean closeCalled;
+
+        FailingValueMap(String storagePath)
+        {
+            super(storagePath);
+        }
+
+        @Override
+        public void close() throws IOException
+        {
+            this.closeCalled = true;
+
+            if (this.failOnClose != null) throw this.failOnClose;
+
+            super.close();
+        }
+
+        @Override
+        public Object clone() throws CloneNotSupportedException
+        {
+            if (this.failOnClone != null) throw this.failOnClone;
+
+            return super.clone();
+        }
+    }
+
+    /**
+     * A map which uses a {@link FailingValueMap} for every level and remembers them in the order they were created.
+     */
+    static class TestCachedNestedMap extends CachedNestedHashMapImpl<String, String>
+    {
+        private static final long serialVersionUID = 1L;
+
+        final List<FailingValueMap> created = new ArrayList<>();
+
+        TestCachedNestedMap(String storagePath)
+        {
+            super(storagePath);
+        }
+
+        @Override
+        protected Map<String, String> createValueMap()
+        {
+            FailingValueMap valueMap = new FailingValueMap(this.storagePath);
+
+            this.created.add(valueMap);
+
+            return valueMap;
+        }
+    }
+
+    /**
+     * Asserts that {@link CachedNestedHashMapImpl#close()} tries to close the value maps of all levels although
+     * closing some fails, throws the first failure with the other ones as suppressed exceptions,
+     * and still empties the map and deletes all cache files.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testCloseTriesAllLevelsAndThrowsFirstFailure() throws Exception
+    {
+        File storage = Files.createTempDirectory(CachedNestedHashMapImplUT.class.getSimpleName()).toFile();
+
+        try
+        {
+            TestCachedNestedMap map = new TestCachedNestedMap(storage.getAbsolutePath());
+            IOException failureA = new IOException("injected a");
+            IOException failureB = new IOException("injected b");
+
+            map.put("a", "1");
+            map.put("b", "x", "2");
+            map.put("c", "y", "3");
+            map.created.get(0).failOnClose = failureA;
+            map.created.get(1).failOnClose = failureB;
+
+            IOException thrown = Assert.assertThrows(IOException.class, map::close);
+            List<Throwable> all = new ArrayList<>(Arrays.asList(thrown.getSuppressed()));
+
+            all.add(thrown);
+
+            Assert.assertEquals(2, all.size());
+            Assert.assertTrue(all.containsAll(Arrays.asList(failureA, failureB)));
+
+            for (FailingValueMap valueMap : map.created) Assert.assertTrue(valueMap.closeCalled);
+
+            Assert.assertTrue(map.isEmpty());
+            Assert.assertEquals(0, countFiles(storage));
+        }
+        finally
+        {
+            for (File file : storage.listFiles()) file.delete();
+
+            storage.delete();
+        }
+    }
+
+    /**
+     * Asserts that if copying the value map of a level fails, {@link CachedNestedHashMapImpl#clone()} deletes the
+     * cache files of the levels it already copied, and leaves the original map and its cache files unchanged.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testCloneWhenCopyingALevelFailsDeletesCopiedCacheFiles() throws Exception
+    {
+        File storage = Files.createTempDirectory(CachedNestedHashMapImplUT.class.getSimpleName()).toFile();
+
+        try (TestCachedNestedMap map = new TestCachedNestedMap(storage.getAbsolutePath()))
+        {
+            CloneNotSupportedException failure = new CloneNotSupportedException("injected");
+
+            // the first level is copied before the second one, which fails
+            map.put("a", "1");
+            map.put("b", "x", "2");
+            map.created.get(1).failOnClone = failure;
+
+            Assert.assertSame(failure, Assert.assertThrows(CloneNotSupportedException.class, map::clone));
+            Assert.assertEquals(2, countFiles(storage));
+            Assert.assertEquals("1", map.get("a"));
+            Assert.assertEquals("2", map.get("b", "x"));
         }
         finally
         {

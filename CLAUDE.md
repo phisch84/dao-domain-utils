@@ -45,6 +45,7 @@ User-facing documentation is in `README.md`; the contract of each class is its J
 | `src/test/java/com/schoste/ddd/util/AbstractCachedHashMapUT.java` | Storage errors of `AbstractCachedHashMap` (with `FailingCachedObject`) |
 | `src/test/java/com/schoste/ddd/util/FailingCachedObject.java` | Test double: in-memory `CachedObject` whose `get`/`commit`/`close`/`clone` can be made to fail |
 | `src/test/java/com/schoste/ddd/util/NestedMapUT.java` | Contract test for every `NestedMap` implementation |
+| `src/test/java/com/schoste/ddd/util/AbstractNestedMapUT.java` | Failures in `AbstractNestedMap#clone()` (test map whose n-th value-map copy fails) |
 | `src/test/java/com/schoste/ddd/util/CachedNestedMapUT.java` | Contract test for every `CachedNestedMap` (extends `NestedMapUT`) |
 | `src/test/java/com/schoste/ddd/util/NestedHashMapUT.java` | Factory for `NestedMapUT` + `NestedHashMap` specific tests |
 | `src/test/java/com/schoste/ddd/util/fs/*ImplUT.java` | Factories for the contract tests + file-system specific tests |
@@ -185,7 +186,9 @@ Checklist for a new utility or implementation:
   (`ArrayList`), while `NestedMapUT` uses `String` values.
 - Test error paths with `FailingCachedObject`: set `failOnGet`/`failOnCommit`/`failOnClose`/`failOnClone`;
   `closeCalled`, `closed` and `clones` show what the code under test did. `AbstractCachedHashMapUT.TestMap`
-  wraps every value in one and lists them in `created`.
+  wraps every value in one and lists them in `created`. For the nested maps, `AbstractNestedMapUT.TestNestedMap`
+  makes the n-th `cloneValueMap` call fail, and `CachedNestedHashMapImplUT.TestCachedNestedMap` uses a
+  `FailingValueMap` (a `CachedHashMapImpl` whose `close`/`clone` fail) per level, so tests can count cache files.
 - Helper in `CachedObjectUT`: `closeWhileBlockedOnLock(operation)` closes an instance while the operation waits
   for `objRefLock` in another thread.
 - Don't rely on thread timing either: make races deterministic by holding the lock until the other thread is
