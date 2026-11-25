@@ -2,7 +2,15 @@ package com.schoste.ddd.util;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.DoubleStream;
 
 import org.junit.Assert;
@@ -333,5 +341,151 @@ public class RunningStatisticsUT
         Assert.assertEquals(stats, stats);
         Assert.assertNotEquals(stats, of(1, 2));
         Assert.assertEquals(System.identityHashCode(stats), stats.hashCode());
+    }
+
+    /**
+     * Asserts that a clone has the same statistics and is independent: data points added to one don't change the other.
+     */
+    @Test
+    public void testClone()
+    {
+        RunningStatistics stats = of(2, 4, 9);
+        RunningStatistics clone = stats.clone();
+
+        Assert.assertNotSame(stats, clone);
+        assertSameStatistics(stats, clone);
+
+        clone.accept(100);
+        stats.accept(-100);
+
+        assertSameStatistics(of(2, 4, 9, 100), clone);
+        assertSameStatistics(of(2, 4, 9, -100), stats);
+    }
+
+    /**
+     * Asserts that a deserialized instance has the same statistics (including the sum's compensation) and can be
+     * continued.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testSerializeAndDeserialize() throws Exception
+    {
+        RunningStatistics stats = of(1e-16);
+
+        stats.combine(of(1.0, 1e-16));
+
+        RunningStatistics copy = TestHelpers.serializeAndDeserialize(stats);
+
+        Assert.assertNotSame(stats, copy);
+        assertSameStatistics(stats, copy);
+        Assert.assertEquals(stats.getSum(), copy.getSum(), 0.0);
+
+        copy.accept(5);
+
+        Assert.assertEquals(stats.getCount() + 1, copy.getCount());
+    }
+
+    /**
+     * Asserts that the class is thread-safe. The test checks results, not timing:
+     * <ul>
+     * <li>8 threads accept 1,000 integers each into one instance: count, sum, minimum and maximum must be exact (the
+     *     integers and their sum are exact doubles), mean and variances must match accepting them in one thread.</li>
+     * <li>Meanwhile an observer takes snapshots with {@link RunningStatistics#clone()}: each one must be consistent
+     *     (minimum &lt;= mean &lt;= maximum).</li>
+     * <li>Meanwhile two threads combine two other instances with each other in both directions; if combine held both
+     *     locks at once, they could deadlock (then the futures time out).</li>
+     * </ul>
+     *
+     * @throws Exception re-throws every exception, also of the threads
+     */
+    @Test
+    public void testConcurrentAcceptCombineAndSnapshots() throws Exception
+    {
+        final int threads = 8;
+        final int valuesPerThread = 1000;
+        final RunningStatistics shared = new RunningStatistics();
+        final RunningStatistics a = new RunningStatistics();
+        final RunningStatistics b = new RunningStatistics();
+        final CountDownLatch start = new CountDownLatch(1);
+        final AtomicBoolean acceptorsDone = new AtomicBoolean();
+        ExecutorService executor = Executors.newFixedThreadPool(threads + 3);
+
+        try
+        {
+            List<Future<?>> acceptors = new ArrayList<>();
+
+            for (int t = 0; t < threads; t++)
+            {
+                final int thread = t;
+
+                acceptors.add(executor.submit(() ->
+                {
+                    start.await();
+
+                    for (int i = 0; i < valuesPerThread; i++) shared.accept(thread * valuesPerThread + i);
+
+                    return null;
+                }));
+            }
+
+            Future<?> observer = executor.submit(() ->
+            {
+                start.await();
+
+                while (!acceptorsDone.get() && !Thread.currentThread().isInterrupted())
+                {
+                    RunningStatistics snapshot = shared.clone();
+
+                    if (snapshot.getCount() > 0)
+                    {
+                        Assert.assertTrue(snapshot.toString(), snapshot.getMin() <= snapshot.getMean());
+                        Assert.assertTrue(snapshot.toString(), snapshot.getMean() <= snapshot.getMax());
+                    }
+                }
+                return null;
+            });
+            Future<?> combineAB = executor.submit(() ->
+            {
+                start.await();
+
+                for (int i = 0; i < 10_000; i++) a.combine(b);
+
+                return null;
+            });
+            Future<?> combineBA = executor.submit(() ->
+            {
+                start.await();
+
+                for (int i = 0; i < 10_000; i++) b.combine(a);
+
+                return null;
+            });
+
+            start.countDown();
+
+            for (Future<?> acceptor : acceptors) acceptor.get(60, TimeUnit.SECONDS);
+
+            acceptorsDone.set(true);
+            observer.get(60, TimeUnit.SECONDS);
+            combineAB.get(60, TimeUnit.SECONDS);
+            combineBA.get(60, TimeUnit.SECONDS);
+        }
+        finally
+        {
+            executor.shutdownNow();
+            executor.awaitTermination(60, TimeUnit.SECONDS);
+        }
+
+        int total = threads * valuesPerThread;
+        RunningStatistics sequential = new RunningStatistics();
+
+        for (int i = 0; i < total; i++) sequential.accept(i);
+
+        Assert.assertEquals(total, shared.getCount());
+        Assert.assertEquals((double) total * (total - 1) / 2, shared.getSum(), 0.0);
+        Assert.assertEquals(0.0, shared.getMin(), 0.0);
+        Assert.assertEquals(total - 1, shared.getMax(), 0.0);
+        assertSameStatistics(sequential, shared);
     }
 }
