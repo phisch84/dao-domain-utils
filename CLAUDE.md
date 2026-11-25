@@ -21,6 +21,9 @@ User-facing documentation is in `README.md`; the contract of each class is its J
 | Some test methods | `mvn -B test -Dtest='CachedHashMapImplUT#testClone*'` |
 
 - Use `verify`, not just `test`: only `verify` runs the Javadoc check, which fails the build on any finding.
+- `verify` also writes the JaCoCo coverage report: `target/site/jacoco/index.html`, per line in `jacoco.xml`,
+  per class in `jacoco.csv` (easiest to read in a terminal). It has no thresholds and never fails the build.
+  Use it to find untested branches when adding tests; with `-Dtest=...` it only covers those tests.
 - Use `clean` when results look odd: the IDE (VS Code Java / Eclipse compiler) also compiles into `target/`,
   and Maven then runs stale classes ("Unresolved compilation problem").
 - CI (`.github/workflows/build.yml`) runs `mvn -B verify` on JDK 21 and 25 for every push and pull request.

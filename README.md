@@ -259,6 +259,7 @@ mvn clean verify
 ```
 
 This runs the tests and the strict Javadoc check, which fails the build on any finding.
+It also writes a test coverage report to `target/site/jacoco/index.html` (JaCoCo; report only, no thresholds).
 Contributor and AI-assistant notes (architecture, design decisions, conventions) are in [CLAUDE.md](CLAUDE.md).
 
 ## License
