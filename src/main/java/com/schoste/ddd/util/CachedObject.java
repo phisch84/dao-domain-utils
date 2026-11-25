@@ -6,6 +6,26 @@ import java.io.Serializable;
 /**
  * Interface to the {@link com.schoste.ddd.util.AbstractCachedObject} class and its concrete implementations.
  * E.g. {@link com.schoste.ddd.util.fs.CachedObjectImpl} - an implementation that serializes objects into a temporary file in the file system (fs)
+ * <p>
+ * <b>Thread safety</b>: one instance may be shared by several threads, with these limits:
+ * </p>
+ * <ul>
+ * <li>{@link #get()}, {@link #commit()} and {@link #close()} synchronize on the instance.
+ *     While the object is in memory, concurrent calls of {@link #get()} return the same instance;
+ *     loading and saving of one instance never overlap. After {@link #close()}, also if another thread called it,
+ *     {@link #get()} and {@link #commit()} throw {@link IllegalStateException}.</li>
+ * <li>The cached object itself is not protected. Callers synchronize changes to it themselves, and must not change it
+ *     while another thread calls {@link #commit()} or {@link #clone()}: serializing an object that is being changed
+ *     may fail (e.g. with {@link java.util.ConcurrentModificationException}) or save an inconsistent state.</li>
+ * <li>Instances that share a storage, e.g. an instance and its deserialized copy, don't synchronize with each other:
+ *     {@link #get()} on one while the other saves may load an incomplete state.
+ *     Share one instance between threads instead of copies.</li>
+ * <li>Hand an instance to other threads safely (e.g. through a concurrent collection or a {@code volatile} field),
+ *     because its fields are not {@code final}.</li>
+ * </ul>
+ * <p>
+ * Collections built on cached objects, like {@link com.schoste.ddd.util.CachedHashMap}, are not thread-safe.
+ * </p>
  *
  * @param <T> the serializable class of object instances to hold and cache
  */
@@ -16,6 +36,7 @@ public interface CachedObject<T> extends Cloneable, Closeable, Serializable
      * Therefore it is not guaranteed that subsequent calls to this method will return the same instance.
      *
      * @return an instance of the cached object
+     * @throws IllegalStateException if the instance was closed or not initialized
      * @throws Exception re-throws every exception
      */
     public T get() throws Exception;

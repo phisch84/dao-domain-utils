@@ -22,6 +22,11 @@ import com.schoste.ddd.util.AbstractCachedObject;
  * Implements {@link com.schoste.ddd.util.AbstractCachedObject}.
  * The objects are cached by serializing them into a temporary file on the file system.
  * The file is deleted by {@link #close()}, or when the JVM exits if the instance was not closed.
+ * <p>
+ * Each cache file is created atomically, so instances may be created concurrently in the same folder,
+ * also by several JVMs. A deserialized instance shares the cache file with the original but not its lock;
+ * see the thread safety rules of {@link com.schoste.ddd.util.CachedObject}.
+ * </p>
  *
  * @param <T> the class of the object to cache
  */

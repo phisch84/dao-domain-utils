@@ -7,6 +7,10 @@ import java.lang.ref.WeakReference;
  * Abstract implementation of an object which's data can be saved to and retrieved from a storage so that it doesn't need to be kept in memory.
  * The object to cache is kept in memory with a {@link WeakReference}. Therefore, when using this class in your implementation, make sure to
  * call {@link AbstractCachedObject#commit()} before the last hard reference is lost. Otherwise you may lose the object's data.
+ * <p>
+ * Deriving classes keep the thread safety rules of {@link CachedObject}: {@link #save(Serializable)} and {@link #load()}
+ * are called while holding {@link #objRefLock}, and {@code close()} must set {@link #objRef} to null while holding it.
+ * </p>
  *
  * @param <T> the class of the object that is being cached.
  */

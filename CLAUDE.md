@@ -83,6 +83,9 @@ Checklist for a new utility or implementation:
   isn't published yet (constructor, `readObject`, `clone`). That's why it needs no `volatile`. A concurrent
   `close()` makes `get()`/`commit()` throw `IllegalStateException` (tested deterministically by
   `closeWhileBlockedOnLock` in `CachedObjectUT`).
+- **Thread safety** (rules in the `CachedObject` Javadoc): the lock protects the reference, not the object's state.
+  Instances that share a cache file (deserialized copies) have separate locks; that race is accepted and
+  documented, not fixed (a lock per file, e.g. a static map, was rejected as too big a change).
 - `fs.CachedObjectImpl` creates each cache file atomically (`Files.createFile`, next name on
   `FileAlreadyExistsException`), so instances created concurrently in one folder (also by other JVMs) never
   share a file. Never check-then-create (`exists()` + write) or use fixed helper file names in the folder

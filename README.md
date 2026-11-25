@@ -54,6 +54,14 @@ try (CachedObject<ArrayList<String>> cached = new CachedObjectImpl<>(new ArrayLi
 - **Close it.** `close()` deletes the cache file. Files that were not closed are deleted when the JVM exits.
 - **Serializing a `CachedObjectImpl` writes only the path of the cache file**, not the object itself.
   It can only be deserialized where that file exists and while it was not closed.
+- **Threads**: one `CachedObject` can be shared by several threads. `get()`, `commit()` and `close()` are
+  synchronized; after `close()` (also from another thread) `get()` and `commit()` throw `IllegalStateException`.
+  Several threads or JVMs may create `CachedObjectImpl`s in the same folder at the same time. But:
+  - the object inside is not protected: synchronize your changes, and don't change it while another thread
+    calls `commit()` or `clone()`;
+  - copies that share a cache file (e.g. a deserialized copy) don't synchronize with each other: `get()` on one
+    while the other one saves may read an incomplete file. Share one instance instead of copies.
+  - `CachedHashMap`, `NestedMap` and `CachedNestedMap` are not thread-safe (like `java.util.HashMap`).
 
 ## CachedHashMap
 
