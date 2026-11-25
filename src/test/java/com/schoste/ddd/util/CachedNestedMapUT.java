@@ -91,6 +91,31 @@ abstract public class CachedNestedMapUT extends NestedMapUT
     }
 
     /**
+     * Asserts that if a value can't be saved (it isn't serializable), {@link NestedMap#put(java.util.List, Object)}
+     * throws {@link IllegalStateException} and leaves the map unchanged: no key without a value below it.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testPutOfUnsavableValueLeavesMapUnchanged() throws Exception
+    {
+        try (CachedNestedMap<String, ArrayList<Object>> map = this.createCachedNestedMap())
+        {
+            ArrayList<Object> saved = new ArrayList<>();
+            ArrayList<Object> unsavable = new ArrayList<>();
+
+            saved.add("1");
+            unsavable.add(new Object());
+            map.put("a", saved);
+
+            Assert.assertThrows(IllegalStateException.class, () -> map.put("b", "x", unsavable));
+            Assert.assertEquals(TestHelpers.set("a"), map.keySet());
+            Assert.assertEquals(1, map.size());
+            Assert.assertTrue(map.getSubMap("b").isEmpty());
+        }
+    }
+
+    /**
      * Asserts that changes to a value which were not saved are lost once the value was garbage collected.
      * This shows that {@link #simulateGC(CachedNestedMap)} works for the other tests.
      *

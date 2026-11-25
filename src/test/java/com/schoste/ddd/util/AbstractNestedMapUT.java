@@ -9,22 +9,35 @@ import org.junit.Assert;
 import org.junit.Test;
 
 /**
- * Tests how {@link AbstractNestedMap#clone()} handles failures while copying the value maps of the levels
- * (see {@link TestNestedMap}). The behaviour without errors is tested by the contract test {@link NestedMapUT}.
+ * Tests how {@link AbstractNestedMap} handles failures of its value maps: when putting a value, and while
+ * {@link AbstractNestedMap#clone()} copies the value maps of the levels (see {@link TestNestedMap}). The behaviour without errors is tested by the contract test {@link NestedMapUT}.
  */
 public class AbstractNestedMapUT
 {
     /**
-     * A {@link HashMap} whose {@link #clear()} can be made to fail.
+     * A {@link HashMap} whose {@link #put(Object, Object)} and {@link #clear()} can be made to fail.
      */
-    static class ClearFailingMap extends HashMap<String, String>
+    static class FailingHashMap extends HashMap<String, String>
     {
         private static final long serialVersionUID = 1L;
+
+        /**
+         * If not null, {@link #put(Object, Object)} throws it.
+         */
+        RuntimeException failOnPut;
 
         /**
          * If not null, {@link #clear()} throws it.
          */
         RuntimeException failOnClear;
+
+        @Override
+        public String put(String key, String value)
+        {
+            if (this.failOnPut != null) throw this.failOnPut;
+
+            return super.put(key, value);
+        }
 
         @Override
         public void clear()
@@ -36,7 +49,8 @@ public class AbstractNestedMapUT
     }
 
     /**
-     * A nested map whose copying of value maps ({@link #cloneValueMap(Map)}) can be made to fail at a given call.
+     * A nested map whose value maps can be made to fail on put, and whose copying of value maps
+     * ({@link #cloneValueMap(Map)}) can be made to fail at a given call.
      */
     static class TestNestedMap extends AbstractNestedMap<String, String>
     {
@@ -58,19 +72,34 @@ public class AbstractNestedMapUT
         RuntimeException uncheckedCopyFailure;
 
         /**
-         * Passed to {@link ClearFailingMap#failOnClear} of every copy.
+         * Passed to {@link FailingHashMap#failOnClear} of every copy.
          */
         RuntimeException failOnClearOfCopies;
 
         /**
+         * Passed to {@link FailingHashMap#failOnPut} of every value map created from now on.
+         */
+        RuntimeException failOnPutOfNewValueMaps;
+
+        /**
+         * The value maps created by {@link #createValueMap()} (also for copies), in order.
+         */
+        final List<FailingHashMap> created = new ArrayList<>();
+
+        /**
          * The value maps copied so far, in order.
          */
-        final List<ClearFailingMap> copies = new ArrayList<>();
+        final List<FailingHashMap> copies = new ArrayList<>();
 
         @Override
         protected Map<String, String> createValueMap()
         {
-            return new ClearFailingMap();
+            FailingHashMap valueMap = new FailingHashMap();
+
+            valueMap.failOnPut = this.failOnPutOfNewValueMaps;
+            this.created.add(valueMap);
+
+            return valueMap;
         }
 
         @Override
@@ -83,7 +112,7 @@ public class AbstractNestedMapUT
                 throw this.uncheckedCopyFailure;
             }
 
-            ClearFailingMap copy = (ClearFailingMap) super.cloneValueMap(valueMap);
+            FailingHashMap copy = (FailingHashMap) super.cloneValueMap(valueMap);
 
             copy.failOnClear = this.failOnClearOfCopies;
             this.copies.add(copy);
@@ -155,7 +184,7 @@ public class AbstractNestedMapUT
         CloneNotSupportedException thrown = Assert.assertThrows(CloneNotSupportedException.class, testMap::clone);
 
         Assert.assertSame(failure, thrown.getCause());
-        for (ClearFailingMap copy : testMap.copies) Assert.assertTrue("a copied value map was not cleared", copy.isEmpty());
+        for (FailingHashMap copy : testMap.copies) Assert.assertTrue("a copied value map was not cleared", copy.isEmpty());
         assertUnchanged(testMap);
     }
 
@@ -179,5 +208,51 @@ public class AbstractNestedMapUT
         Assert.assertSame(failure, thrown);
         Assert.assertArrayEquals(new Throwable[] { clearFailure }, thrown.getSuppressed());
         assertUnchanged(testMap);
+    }
+
+    /**
+     * Asserts that if storing a value at a new path fails, {@link AbstractNestedMap#put(java.util.List, Object)} throws
+     * the failure and removes the levels it created for the path, so the map is unchanged
+     * (no key in {@link AbstractNestedMap#keySet()} without a value below it).
+     */
+    @Test
+    public void testPutWhenStoringFailsRemovesCreatedLevels()
+    {
+        TestNestedMap testMap = new TestNestedMap();
+        IllegalStateException failure = new IllegalStateException("injected");
+
+        testMap.put("a", "1");
+        testMap.failOnPutOfNewValueMaps = failure;
+
+        Assert.assertSame(failure, Assert.assertThrows(IllegalStateException.class, () -> testMap.put("b", "x", "y", "2")));
+        Assert.assertEquals(TestHelpers.set("a"), testMap.keySet());
+        Assert.assertEquals(1, testMap.size());
+        Assert.assertTrue(testMap.getSubMap("b").isEmpty());
+
+        TestNestedMap emptyMap = new TestNestedMap();
+
+        emptyMap.failOnPutOfNewValueMaps = failure;
+
+        Assert.assertSame(failure, Assert.assertThrows(IllegalStateException.class, () -> emptyMap.put("a", "1")));
+        Assert.assertTrue(emptyMap.keySet().isEmpty());
+        Assert.assertTrue(emptyMap.isEmpty());
+    }
+
+    /**
+     * Asserts that if storing a value in a level which already has values fails, the level and its values stay.
+     */
+    @Test
+    public void testPutWhenStoringInExistingLevelFailsKeepsLevel()
+    {
+        TestNestedMap testMap = new TestNestedMap();
+        IllegalStateException failure = new IllegalStateException("injected");
+
+        testMap.put("b", "x", "1");
+        testMap.created.get(0).failOnPut = failure;
+
+        Assert.assertSame(failure, Assert.assertThrows(IllegalStateException.class, () -> testMap.put("b", "y", "2")));
+        Assert.assertEquals(TestHelpers.set("b"), testMap.keySet());
+        Assert.assertEquals("1", testMap.get("b", "x"));
+        Assert.assertEquals(1, testMap.size());
     }
 }

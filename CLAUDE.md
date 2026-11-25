@@ -153,7 +153,8 @@ Checklist for a new utility or implementation:
   prefixes its `path`; every call resolves the path again, so a view survives pruning and re-creation. A missing
   path gives an empty view; `put` through it creates the path. `clear()` on a view keeps the value at its path.
 - **Pruning**: `remove`/`clear` remove levels left without values and children (never the root); empty value maps are
-  dropped (set to null). `clear` empties every value map below, which frees cached storage.
+  dropped (set to null). A `put` whose value map throws prunes the path too, so it leaves no empty levels
+  (tested by `AbstractNestedMapUT` and `testPutOfUnsavableValueLeavesMapUnchanged`). `clear` empties every value map below, which frees cached storage.
 - `CachedNestedMap`: `commit()`/`close()` act on the whole map (via `getValueMaps()`); `getSubMap` returns a plain
   `NestedMap`. `close()` closes every level's `CachedHashMapImpl` (first `IOException` thrown, others suppressed).
 - **Serialization**: levels and value maps are serialized as they are (cached: references only, shared cache files).

@@ -330,7 +330,10 @@ abstract public class AbstractNestedMap<K, V> implements NestedMap<K, V>
 
         List<K> fullPath = this.fullPath(keys);
         int depth = fullPath.size() - 1;
+        List<Level<K, V>> levels = new ArrayList<Level<K, V>>(depth + 1);
         Level<K, V> level = this.owner.root;
+
+        levels.add(level);
 
         for (int i = 0; i < depth; i++)
         {
@@ -342,12 +345,22 @@ abstract public class AbstractNestedMap<K, V> implements NestedMap<K, V>
                 level.children.put(fullPath.get(i), child);
             }
             level = child;
+            levels.add(level);
         }
         if (level.values == null)
         {
             level.values = this.owner.createValueMap();
         }
-        return level.values.put(fullPath.get(depth), value);
+        try
+        {
+            return level.values.put(fullPath.get(depth), value);
+        }
+        catch (RuntimeException | Error e)
+        {
+            // removes the levels and the value map created above if they are still empty
+            prune(levels, fullPath);
+            throw e;
+        }
     }
 
     @Override
