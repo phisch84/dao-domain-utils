@@ -31,6 +31,11 @@ import java.util.function.DoubleConsumer;
  *     population variance of no data points, and the sample variance of fewer than two data points (it divides by
  *     {@code count - 1}). Like {@link java.util.DoubleSummaryStatistics}, the sum of no data points is 0, the minimum
  *     is {@link Double#POSITIVE_INFINITY} and the maximum is {@link Double#NEGATIVE_INFINITY}.</li>
+ * <li>Data points are {@code double}s, like for {@link java.util.DoubleSummaryStatistics}: {@code int}, {@code long} and
+ *     {@code float} values widen to {@code double} automatically, other {@link Number}s via {@link Number#doubleValue()}.
+ *     A {@code double} holds integers exactly only up to 2<sup>53</sup>; for larger {@code long} values (e.g. timestamps
+ *     in nanoseconds), add the differences to a base value instead: the variances stay the same, and the mean is the
+ *     base plus the mean of the differences.</li>
  * <li>Data points which are {@link Double#NaN} or infinite are accepted and make the affected statistics NaN or
  *     infinite, following the rules of floating-point arithmetic (as for {@link java.util.DoubleSummaryStatistics}).</li>
  * <li>{@link #combine(RunningStatistics)} adds the data points of another instance, so statistics can be computed in
