@@ -12,6 +12,7 @@ Requires Java 8 or newer. No runtime dependencies.
 | [`CachedHashMap<K, V>`](#cachedhashmap) | A `java.util.Map` whose values are each kept in a `CachedObject`, so large maps don't fill the heap |
 | [`NestedMap<K, V>`](#nestedmap) | A map of maps (a trie): a value is stored under a path of keys, e.g. `put("a", "b", "c", value)` |
 | [`CachedNestedMap<K, V>`](#cachednestedmap) | A `NestedMap` whose values are cached like in a `CachedHashMap` |
+| [`CachedQueue<E>`](#cachedqueue) | A thread-safe FIFO `java.util.Queue` whose elements are each kept in a `CachedObject` |
 
 The cached types come with a file system implementation in the package `com.schoste.ddd.util.fs`;
 `NestedHashMap` is the in-memory `NestedMap`.
@@ -61,7 +62,8 @@ try (CachedObject<ArrayList<String>> cached = new CachedObjectImpl<>(new ArrayLi
     calls `commit()` or `clone()`;
   - copies that share a cache file (e.g. a deserialized copy) don't synchronize with each other: `get()` on one
     while the other one saves may read an incomplete file. Share one instance instead of copies.
-  - `CachedHashMap`, `NestedMap` and `CachedNestedMap` are not thread-safe (like `java.util.HashMap`).
+  - `CachedHashMap`, `NestedMap` and `CachedNestedMap` are not thread-safe (like `java.util.HashMap`);
+    [`CachedQueue`](#cachedqueue) is.
 
 ## CachedHashMap
 
@@ -206,6 +208,54 @@ All rules of [`NestedMap`](#nestedmap) apply, and the ones of [`CachedHashMap`](
   serializing; the deserialized map shares the cache files with the original.
 - **Storage errors** are thrown as `IllegalStateException` with the original exception as cause.
 
+## CachedQueue
+
+`CachedQueue<E>` is a thread-safe FIFO `java.util.Queue` for many or large elements. Each element is stored in its own
+`CachedObject`, so the garbage collector may reclaim the elements which aren't in use, and the queue loads them again
+when they are needed. It doesn't block: `poll()` returns `null` for an empty queue instead of waiting, like
+`java.util.concurrent.ConcurrentLinkedQueue`.
+
+`fs.CachedQueueImpl` stores each element in its own cache file in `java.io.tmpdir` or in a folder you choose.
+
+```java
+import com.schoste.ddd.util.CachedQueue;
+import com.schoste.ddd.util.fs.CachedQueueImpl;
+
+try (CachedQueue<ArrayList<String>> queue = new CachedQueueImpl<>("/var/cache/my-app"))
+{
+    queue.offer(new ArrayList<>(Arrays.asList("1")));  // offer() saves the element
+    queue.offer(new ArrayList<>(Arrays.asList("2")));
+
+    ArrayList<String> head = queue.peek();  // the head stays in the queue ...
+
+    head.add("changed");
+    queue.commit();     // ... so save the change with commit() while you hold the reference
+
+    head = queue.poll();  // [1, changed]; poll() deletes its cache file
+}                         // close() deletes the remaining cache files
+```
+
+### Rules
+
+- **Thread-safe**: all methods may be called from several threads at the same time. Adding, taking or removing one
+  element is atomic, e.g. two threads never `poll()` the same element. Bulk methods (`addAll`, `removeAll`, ...) are not
+  atomic as a whole, and changes to the elements themselves are not synchronized by the queue.
+- **Save changes** to an element which is in the queue with `commit()`, while you still hold a reference to it.
+  Changes that weren't saved are lost once the element is garbage collected.
+- **Elements may be copies**: `poll()`, `peek()` and iterating may return a copy loaded from the storage,
+  not the instance you added.
+- **Iterators are weakly consistent**, like those of `ConcurrentLinkedQueue`: they return the elements which were in the
+  queue when they were created, in order, skip elements removed in the meantime, and never throw a
+  `ConcurrentModificationException`. They load the elements one at a time; `size()` and `isEmpty()` don't load any.
+- **Removing frees storage**: `poll()`, `remove()`, `remove(Object)`, `removeIf`, the iterator's `remove()`, `clear()` and
+  `close()` delete the cache files of the removed elements. Close the queue when you don't need it anymore.
+- **No `null` elements**: `offer(null)` and `add(null)` throw a `NullPointerException`. There is no capacity limit.
+- **`equals()` and `hashCode()` are identity**, like for `ArrayDeque` and `ConcurrentLinkedQueue`.
+- **`clone()` copies the current state**, including changes that weren't saved, into its own cache files.
+- **Serializing writes only references** (the paths of the cache files). Call `commit()` before serializing;
+  the deserialized queue shares the cache files with the original.
+- **Storage errors** are thrown as `IllegalStateException` with the original exception as cause.
+
 ## Installation
 
 The library is published to GitHub Packages. Add the repository and the dependency to your `pom.xml`:
@@ -251,10 +301,11 @@ To store data somewhere else than in files (e.g. a database), implement the abst
 | `CachedHashMap` | `AbstractCachedHashMap` | `createCachedObject(V)`, which wraps a value in your `CachedObject` |
 | `NestedMap` | `AbstractNestedMap` | `createValueMap()`, the map for the values of one level; `cloneValueMap(Map)` if the values should not be shared by clones |
 | `CachedNestedMap` | `AbstractNestedMap` | as for `NestedMap`, returning your `CachedHashMap`; plus `commit()`, `close()` and `cloneValueMap(Map)` (see `fs.CachedNestedHashMapImpl`) |
+| `CachedQueue` | `AbstractCachedQueue` | `createCachedObject(E)`, which wraps an element in your `CachedObject` |
 
 The test-jar (`<classifier>tests</classifier>`) contains the abstract contract tests `CachedObjectUT`,
-`CachedHashMapUT`, `NestedMapUT` and `CachedNestedMapUT` (which includes `NestedMapUT`): derive your test classes
-from them and implement their factory methods to check that your implementation behaves like the others.
+`CachedHashMapUT`, `NestedMapUT`, `CachedNestedMapUT` (which includes `NestedMapUT`) and `CachedQueueUT`:
+derive your test classes from them and implement their factory methods to check that your implementation behaves like the others.
 
 ## Building
 

@@ -24,7 +24,8 @@ import java.io.Serializable;
  *     because its fields are not {@code final}.</li>
  * </ul>
  * <p>
- * Collections built on cached objects, like {@link com.schoste.ddd.util.CachedHashMap}, are not thread-safe.
+ * Of the collections built on cached objects, the maps (e.g. {@link com.schoste.ddd.util.CachedHashMap}) are not
+ * thread-safe; {@link com.schoste.ddd.util.CachedQueue} is.
  * </p>
  *
  * @param <T> the serializable class of object instances to hold and cache

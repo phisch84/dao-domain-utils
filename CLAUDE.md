@@ -3,12 +3,13 @@
 Helper library for the DDD libraries [dao](https://github.com/phisch84/dao) and
 [domain-repository](https://github.com/phisch84/domain-repository): code that fits none of the
 infrastructure, domain or application layers. It provides memory-saving holders whose data lives in a
-storage and is kept in memory only weakly, and a map with key paths:
+storage and is kept in memory only weakly, a map with key paths, and a thread-safe queue:
 
 - `CachedObject<T>`: one `Serializable` object, reloaded from storage on demand.
 - `CachedHashMap<K, V>`: a `java.util.Map` whose keys stay in memory and whose values are each a `CachedObject`.
 - `NestedMap<K, V>`: a map of maps (trie): `put(k1, k2, k3, v)`, `get(k1, k2, k3)`, `getSubMap(k1)`.
   `NestedHashMap` is in memory; `CachedNestedMap` / `fs.CachedNestedHashMapImpl` caches the values.
+- `CachedQueue<E>`: a thread-safe FIFO `java.util.Queue` whose elements are each a `CachedObject`.
 
 User-facing documentation is in `README.md`; the contract of each class is its Javadoc.
 
@@ -37,6 +38,10 @@ User-facing documentation is in `README.md`; the contract of each class is its J
     suppressed delete failure (the file system can't be made to refuse a delete in a test).
   - `AbstractNestedMap.prune`: `i >= 0` → `i > 0` (an empty value map stays on the root; invisible through the API).
   - `AbstractNestedMap.SubMap.createValueMap`: never called (see its comment).
+  - `AbstractCachedQueue.containsInstance`/`removeInstance`: "replaced boolean return with true" on a line which
+    returns true (and the same for false) changes nothing.
+  - `CachedObjectImpl.initializeCacheFile`: the `MAX_ACCESS_DENIED_RETRIES` limit has no coverage on Windows, because
+    `testUnwritableFolderIsRejected` needs POSIX permissions; it runs on CI (Linux).
 - Use `clean` when results look odd: the IDE (VS Code Java / Eclipse compiler) also compiles into `target/`,
   and Maven then runs stale classes ("Unresolved compilation problem").
 - CI (`.github/workflows/build.yml`) runs `mvn -B verify` on JDK 21 and 25 for every push and pull request.
@@ -58,6 +63,9 @@ User-facing documentation is in `README.md`; the contract of each class is its J
 | `src/main/java/com/schoste/ddd/util/NestedHashMap.java` | In-memory implementation: a `HashMap` per level |
 | `src/main/java/com/schoste/ddd/util/CachedNestedMap.java` | Interface: `NestedMap` + `commit()` + `Closeable`, rules of a cached nested map |
 | `src/main/java/com/schoste/ddd/util/fs/CachedNestedHashMapImpl.java` | A `CachedHashMapImpl` per level in `storagePath`; `commit`/`close`/`cloneValueMap` |
+| `src/main/java/com/schoste/ddd/util/CachedQueue.java` | Interface + usage rules of the thread-safe queue, adds `commit()` and `clone()` |
+| `src/main/java/com/schoste/ddd/util/AbstractCachedQueue.java` | All queue logic (extends `java.util.AbstractQueue`, lock, snapshot iterator); subclasses implement `createCachedObject(E)` |
+| `src/main/java/com/schoste/ddd/util/fs/CachedQueueImpl.java` | Creates a `CachedObjectImpl` per element in `storagePath` |
 | `src/test/java/com/schoste/ddd/util/CachedObjectUT.java` | Contract test for every `CachedObject` implementation |
 | `src/test/java/com/schoste/ddd/util/CachedHashMapUT.java` | Contract test for every `CachedHashMap` implementation |
 | `src/test/java/com/schoste/ddd/util/AbstractCachedHashMapUT.java` | Storage errors of `AbstractCachedHashMap` (with `FailingCachedObject`) |
@@ -67,6 +75,8 @@ User-facing documentation is in `README.md`; the contract of each class is its J
 | `src/test/java/com/schoste/ddd/util/AbstractNestedMapUT.java` | Failures in `AbstractNestedMap#clone()` (test map whose n-th value-map copy fails) |
 | `src/test/java/com/schoste/ddd/util/CachedNestedMapUT.java` | Contract test for every `CachedNestedMap` (extends `NestedMapUT`) |
 | `src/test/java/com/schoste/ddd/util/NestedHashMapUT.java` | Factory for `NestedMapUT` + `NestedHashMap` specific tests |
+| `src/test/java/com/schoste/ddd/util/CachedQueueUT.java` | Contract test for every `CachedQueue` (incl. a concurrency stress test) |
+| `src/test/java/com/schoste/ddd/util/AbstractCachedQueueUT.java` | Storage errors and races of `AbstractCachedQueue` (with `FailingCachedObject`), lock release |
 | `src/test/java/com/schoste/ddd/util/fs/*ImplUT.java` | Factories for the contract tests + file-system specific tests |
 
 ## Architecture pattern (follow it for every new utility)
@@ -87,7 +97,8 @@ Checklist for a new utility or implementation:
 - [ ] Javadoc for everything public/protected, including the usage rules in the interface.
 - [ ] `serialVersionUID` on serializable classes; decide what serialization writes.
 - [ ] Every way to remove or replace something frees its storage (`close()`).
-- [ ] Decide the thread safety and state it in the interface Javadoc and `README.md` (collections: not thread-safe).
+- [ ] Decide the thread safety and state it in the interface Javadoc and `README.md` (the maps are not thread-safe,
+      `CachedQueue` is); a thread-safe type needs concurrency tests (see Tests).
 - [ ] `mvn -B clean verify` passes; update `README.md` (users) and this file (decisions, code map).
 
 ## Design decisions (don't change without asking)
@@ -198,6 +209,32 @@ Checklist for a new utility or implementation:
 - `commit()`/`close()` live in `fs.CachedNestedHashMapImpl`; extract an `AbstractCachedNestedMap` when a second
   storage implementation appears.
 
+### CachedQueue
+
+- `CachedQueue<E extends Serializable>` extends `java.util.Queue` (FIFO, unbounded, not blocking like
+  `ConcurrentLinkedQueue`; `BlockingQueue` can be added later, it extends `Queue`). One `CachedObject` per element.
+  Use case: `domain-repository`'s `GenericEntityLoaderImpl` keeps entities in a `Queue` with `add`/`poll`.
+- **Thread-safe** (unlike the maps): `protected ReentrantLock lock` guards only the order in
+  `protected ArrayDeque<CachedObject<E>> cachedElements`. Loading and saving happen **outside** the lock, so a slow
+  storage doesn't block other threads (needed for the planned background pre-loading); each `CachedObject` locks itself.
+  Every access to `cachedElements` holds the lock; every method releases it (`testEveryMethodReleasesTheLock`).
+- **Elements removed meanwhile**: between reading the order and loading, another thread may remove and close an
+  element. `peek` then retries with the new head; the iterator, `commit` and `clone` skip it. A failure of an element
+  which is still in the queue (`containsInstance`) is a real storage error and is thrown.
+- **Identity, not `equals`**: `CachedObject.equals` compares content, so `ArrayDeque.remove(Object)`/`contains` could hit
+  an equal element. `containsInstance`/`removeInstance` compare `CachedObject`s with `==`.
+- **Iterator** (weakly consistent): snapshot of the `CachedObject` references; loads in `hasNext`, keeps no reference
+  after `next`; `remove()` removes and closes exactly the element returned last (no-op if already removed).
+- `offer` wraps and commits outside the lock, then appends; a failed commit closes the new element. `poll` takes the head
+  under the lock, then loads and closes it (closed also if loading fails). `clear()`/`close()` close every element
+  without loading it (overrides `AbstractQueue.clear`, which polls). `commit()`/`close()` try every element (first
+  exception thrown, others suppressed). The queue can be used again after `close()`.
+- `equals`/`hashCode` are identity (like `ArrayDeque`); bulk methods of `AbstractQueue` aren't atomic as a whole.
+- **Serialization**: `cachedElements` as is (references only, shared cache files), written by `writeObject` while
+  holding the lock; `lock` is `transient` and recreated in `readObject`.
+- **`clone()`**: `super.clone()` + own lock + a clone of every `CachedObject` from a snapshot (skips elements removed
+  meanwhile); on failure the clones are closed and `CloneNotSupportedException` (with cause) is thrown.
+
 ## Code and Javadoc rules
 
 - The code must compile against **Java 8** (`maven.compiler.release=8`), even though newer JDKs build it.
@@ -234,6 +271,14 @@ Checklist for a new utility or implementation:
   wraps every value in one and lists them in `created`. For the nested maps, `AbstractNestedMapUT.TestNestedMap`
   makes the n-th `cloneValueMap` call fail, and `CachedNestedHashMapImplUT.TestCachedNestedMap` uses a
   `FailingValueMap` (a `CachedHashMapImpl` whose `close`/`clone` fail) per level, so tests can count cache files.
+- `FailingCachedObject.beforeNextAccess` runs once at the start of the next `get`/`commit`/`clone`: it lets a
+  single-threaded test act as another thread just then (e.g. `= queue::poll` takes the element while it is loaded).
+  `AbstractCachedQueueUT.TestQueue.of(...)` wraps every element in one; `commitCalls`/`closeCalls` count calls.
+- Helpers in `CachedQueueUT`: `cachedElementsOf(queue)` (copy under the lock), `simulateGC(queue)`, `isLoaded(cachedObject)`.
+  Its generic factory `createCachedQueue()` lets tests use `String` or mutable `ArrayList` elements.
+- Concurrency tests check results, never timing: start threads with a `CountDownLatch`, let loops stop when
+  interrupted, get every `Future` with a timeout. A missing `unlock()` is found deterministically with
+  `lock.isLocked()` after each call.
 - Helper in `CachedObjectUT`: `closeWhileBlockedOnLock(operation)` closes an instance while the operation waits
   for `objRefLock` in another thread.
 - Don't rely on thread timing either: make races deterministic by holding the lock until the other thread is
