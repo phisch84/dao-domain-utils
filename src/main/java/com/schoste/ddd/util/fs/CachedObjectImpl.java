@@ -288,7 +288,8 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
      *
      * @see java.lang.Object#clone()
      * @return a clone of this instance
-     * @throws CloneNotSupportedException thrown if cloning failed. The stack trace of the original exception is written to {@link System#err}
+     * @throws CloneNotSupportedException thrown if cloning failed (e.g. because the instance was closed),
+     *         with the original exception as cause and its message
      */
     @Override
     public Object clone() throws CloneNotSupportedException
@@ -307,9 +308,11 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         }
         catch (Exception e)
         {
-            e.printStackTrace(System.err);
+            CloneNotSupportedException failure = new CloneNotSupportedException(e.getMessage());
 
-            throw new CloneNotSupportedException();
+            failure.initCause(e);
+
+            throw failure;
         }
     }
 

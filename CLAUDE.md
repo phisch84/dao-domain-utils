@@ -80,6 +80,8 @@ Checklist for a new utility or implementation:
   so a deserialized copy keeps it. Cached objects must not change their hash code.
 - `commit()` does nothing if the object was already garbage collected: the storage keeps the last
   committed state. Callers must commit while they hold a reference.
+- If `clone()` fails, it throws `CloneNotSupportedException` with the original exception as cause (like the maps),
+  never just a stack trace on `System.err`.
 - `clone()` copies the current state (via `get()`), including uncommitted changes, into its own
   cache file and holds its own instance.
 - `close()` does nothing on an instance that is already closed or was never initialized (no-arg constructor);

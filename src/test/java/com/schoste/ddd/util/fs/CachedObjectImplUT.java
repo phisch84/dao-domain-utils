@@ -175,6 +175,25 @@ public class CachedObjectImplUT extends CachedObjectUT
     }
 
     /**
+     * Asserts that if cloning fails (here because the instance was closed), {@link CachedObjectImpl#clone()} throws
+     * {@link CloneNotSupportedException} with the original exception as cause and its message.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testCloneFailureKeepsCause() throws Exception
+    {
+        CachedObjectImpl<String> testObj = new CachedObjectImpl<String>("testCloneFailureKeepsCause");
+
+        testObj.close();
+
+        CloneNotSupportedException thrown = Assert.assertThrows(CloneNotSupportedException.class, testObj::clone);
+
+        Assert.assertTrue(String.valueOf(thrown.getCause()), thrown.getCause() instanceof IllegalStateException);
+        Assert.assertEquals(thrown.getCause().getMessage(), thrown.getMessage());
+    }
+
+    /**
      * Asserts that instances created concurrently in the same folder don't fail and don't share a cache file:
      * every instance has its own file and loads its own object.
      *
