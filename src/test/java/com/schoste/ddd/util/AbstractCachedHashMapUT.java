@@ -201,6 +201,35 @@ public class AbstractCachedHashMapUT
     }
 
     /**
+     * Asserts that {@link AbstractCachedHashMap#commit()} tries to save every value although saving some fails,
+     * and throws the first failure with the other ones as suppressed exceptions (like {@link AbstractCachedHashMap#close()}).
+     */
+    @Test
+    public void testCommitTriesAllValuesAndThrowsFirstFailure()
+    {
+        TestMap testMap = new TestMap();
+        IOException failureA = new IOException("injected a");
+        IOException failureB = new IOException("injected b");
+
+        testMap.put("a", "1");
+        testMap.put("b", "2");
+        testMap.put("c", "3");
+        testMap.cachedValueOf("a").failOnCommit = failureA;
+        testMap.cachedValueOf("b").failOnCommit = failureB;
+
+        IOException thrown = Assert.assertThrows(IOException.class, testMap::commit);
+        List<Throwable> all = new ArrayList<>(Arrays.asList(thrown.getSuppressed()));
+
+        all.add(thrown);
+
+        Assert.assertEquals(2, all.size());
+        Assert.assertTrue(all.containsAll(Arrays.asList(failureA, failureB)));
+
+        // one commit by put, one by commit()
+        for (FailingCachedObject<String> cachedValue : testMap.created) Assert.assertEquals(2, cachedValue.commitCalls);
+    }
+
+    /**
      * Asserts that {@link AbstractCachedHashMap#clear()} empties the map although closing a value fails,
      * and throws the failure as {@link IllegalStateException} with it as cause.
      */

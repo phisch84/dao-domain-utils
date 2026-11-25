@@ -83,16 +83,30 @@ public class CachedNestedHashMapImpl<K, V extends Serializable> extends Abstract
 
     /**
      * Saves the values in memory of every level (see {@link com.schoste.ddd.util.CachedHashMap#commit()}).
+     * Tries to save every level; if saving fails, the first exception is thrown with the others as suppressed
+     * exceptions (like {@link #close()}).
      *
-     * @throws Exception re-throws every exception
+     * @throws Exception the first exception of saving a level
      */
     @Override
     public void commit() throws Exception
     {
+        Exception firstException = null;
+
         for (Map<K, V> valueMap : this.getValueMaps())
         {
-            ((CachedHashMap<K, V>) valueMap).commit();
+            try
+            {
+                ((CachedHashMap<K, V>) valueMap).commit();
+            }
+            catch (Exception e)
+            {
+                if (firstException == null) firstException = e;
+                else firstException.addSuppressed(e);
+            }
         }
+
+        if (firstException != null) throw firstException;
     }
 
     /**

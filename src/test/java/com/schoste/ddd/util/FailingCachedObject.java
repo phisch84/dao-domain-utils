@@ -43,6 +43,11 @@ public class FailingCachedObject<V extends Serializable> implements CachedObject
     public CloneNotSupportedException failOnClone;
 
     /**
+     * How often {@link #commit()} was called, also if it failed.
+     */
+    public int commitCalls;
+
+    /**
      * True once {@link #close()} was called, also if it failed.
      */
     public boolean closeCalled;
@@ -79,6 +84,8 @@ public class FailingCachedObject<V extends Serializable> implements CachedObject
     @Override
     public void commit() throws Exception
     {
+        this.commitCalls++;
+
         if (this.closed) throw new IllegalStateException("closed");
         if (this.failOnCommit != null) throw this.failOnCommit;
     }

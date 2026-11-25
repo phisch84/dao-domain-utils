@@ -132,6 +132,8 @@ Checklist for a new utility or implementation:
   `put`/`setValue`, `clear`, `close`, and the iterator's `remove()` (which covers `keySet()`/`values()`
   removal, `removeIf`, `retainAll`). A new removal path must do the same.
 - `close()`/`clear()` try to close every value; the first `IOException` is thrown with the others suppressed.
+  `commit()` likewise tries to save every value (the first exception thrown, the others suppressed); so does
+  `CachedNestedHashMapImpl.commit()`/`close()` across the levels.
 - **Serialization writes references only**: `cachedValues` is serialized as is, so each `CachedObjectImpl` writes
   its cache-file path. The deserialized map shares the cache files with the original (closing one frees
   the other's storage). Callers must `commit()` before serializing. `K` has no `Serializable` bound

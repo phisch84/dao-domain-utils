@@ -364,14 +364,31 @@ abstract public class AbstractCachedHashMap<K, V extends Serializable> extends A
     }
 
     /**
-     * (non-Javadoc)
+     * Saves every value which is in memory. Tries to save every value; if saving fails,
+     * the first exception is thrown with the others as suppressed exceptions (like {@link #close()}).
      *
      * @see com.schoste.ddd.util.CachedHashMap#commit()
+     * @throws Exception the first exception of saving a value
      */
     @Override
     public void commit() throws Exception
     {
-        for (CachedObject<V> cachedValue : this.cachedValues.values()) cachedValue.commit();
+        Exception failure = null;
+
+        for (CachedObject<V> cachedValue : this.cachedValues.values())
+        {
+            try
+            {
+                cachedValue.commit();
+            }
+            catch (Exception e)
+            {
+                if (failure == null) failure = e;
+                else failure.addSuppressed(e);
+            }
+        }
+
+        if (failure != null) throw failure;
     }
 
     /**

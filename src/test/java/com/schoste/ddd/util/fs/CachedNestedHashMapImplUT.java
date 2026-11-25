@@ -181,13 +181,33 @@ public class CachedNestedHashMapImplUT extends CachedNestedMapUT
         CloneNotSupportedException failOnClone;
 
         /**
+         * If not null, {@link #commit()} throws it without saving the values.
+         */
+        Exception failOnCommit;
+
+        /**
          * True once {@link #close()} was called, also if it failed.
          */
         boolean closeCalled;
 
+        /**
+         * True once {@link #commit()} was called, also if it failed.
+         */
+        boolean commitCalled;
+
         FailingValueMap(String storagePath)
         {
             super(storagePath);
+        }
+
+        @Override
+        public void commit() throws Exception
+        {
+            this.commitCalled = true;
+
+            if (this.failOnCommit != null) throw this.failOnCommit;
+
+            super.commit();
         }
 
         @Override
@@ -295,6 +315,44 @@ public class CachedNestedHashMapImplUT extends CachedNestedMapUT
             map.close();
 
             Assert.assertEquals(0, countFiles(storage));
+        }
+        finally
+        {
+            TestHelpers.deleteRecursively(storage);
+        }
+    }
+
+    /**
+     * Asserts that {@link CachedNestedHashMapImpl#commit()} tries to save the value maps of all levels although saving
+     * some fails, and throws the first failure with the other ones as suppressed exceptions.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testCommitTriesAllLevelsAndThrowsFirstFailure() throws Exception
+    {
+        File storage = Files.createTempDirectory(CachedNestedHashMapImplUT.class.getSimpleName()).toFile();
+
+        try (TestCachedNestedMap map = new TestCachedNestedMap(storage.getAbsolutePath()))
+        {
+            IOException failureA = new IOException("injected a");
+            IOException failureB = new IOException("injected b");
+
+            map.put("a", "1");
+            map.put("b", "x", "2");
+            map.put("c", "y", "3");
+            map.created.get(0).failOnCommit = failureA;
+            map.created.get(1).failOnCommit = failureB;
+
+            IOException thrown = Assert.assertThrows(IOException.class, map::commit);
+            List<Throwable> all = new ArrayList<>(Arrays.asList(thrown.getSuppressed()));
+
+            all.add(thrown);
+
+            Assert.assertEquals(2, all.size());
+            Assert.assertTrue(all.containsAll(Arrays.asList(failureA, failureB)));
+
+            for (FailingValueMap valueMap : map.created) Assert.assertTrue(valueMap.commitCalled);
         }
         finally
         {

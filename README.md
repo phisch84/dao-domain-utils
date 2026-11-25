@@ -96,7 +96,8 @@ try (CachedHashMap<String, ArrayList<String>> map = new CachedHashMapImpl<>("/va
 
 - **Save changes**: `put()` saves a value. Save a changed value with `put()` again, or all values in memory
   with `commit()`, while you still hold a reference to them. Changes that weren't saved are lost
-  once the value is garbage collected.
+  once the value is garbage collected. If saving one value fails, `commit()` still saves the others and then
+  throws the first failure (the others are attached as suppressed exceptions).
 - **Values may be copies**: `get()`, `values()` and the entries may return a copy loaded from the storage,
   not the instance you put.
 - **No `null` values**: `put(key, null)` throws a `NullPointerException`. `null` keys are allowed.

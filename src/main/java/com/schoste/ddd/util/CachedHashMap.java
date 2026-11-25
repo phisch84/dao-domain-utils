@@ -46,8 +46,10 @@ public interface CachedHashMap<K, V extends Serializable> extends Map<K, V>, Clo
     /**
      * Saves all values which are in memory to the storage (see {@link com.schoste.ddd.util.CachedObject#commit()}).
      * Values which were already garbage collected keep their last saved state.
+     * If saving a value fails, the other values are still saved; the first exception is thrown
+     * with the others as suppressed exceptions.
      *
-     * @throws Exception re-throws every exception
+     * @throws Exception the first exception of saving a value
      */
     public void commit() throws Exception;
 
