@@ -185,9 +185,12 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
      */
     protected transient File cacheFile;
 
-    /**    (non-Javadoc)
+    /**
+     * Serializes the object into the cache file, replacing its content.
      *
-     * @see com.schoste.ddd.util.AbstractCachedObject#save(java.io.Serializable)
+     * @param obj the object to save, not null
+     * @throws IllegalArgumentException if obj is null
+     * @throws Exception re-throws every exception of writing the file (e.g. {@link java.io.NotSerializableException})
      */
     @Override
     protected void save(T obj) throws Exception
@@ -199,15 +202,15 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         {
             oos.writeObject(obj);
         }
-        catch (Exception e)
-        {
-            throw e;
-        }
     }
 
-    /**    (non-Javadoc)
+    /**
+     * Deserializes the object from the cache file.
      *
-     * @see com.schoste.ddd.util.AbstractCachedObject#load()
+     * @return a new instance of the object, as it was saved last
+     * @throws IllegalStateException if there is no cache file (the instance was closed, not initialized,
+     *         or the file was deleted)
+     * @throws Exception re-throws every exception of reading the file
      */
     @Override
     @SuppressWarnings("unchecked")
@@ -215,16 +218,10 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
     {
         if ((this.cacheFile == null) || !this.cacheFile.exists()) throw new IllegalStateException();
 
-        try(FileInputStream fis = new FileInputStream(this.cacheFile);
+        try (FileInputStream fis = new FileInputStream(this.cacheFile);
             ObjectInputStream ois = new ObjectInputStream(fis))
         {
-            T obj = (T) ois.readObject();
-
-            return obj;
-        }
-        catch (Exception ex)
-        {
-            throw ex;
+            return (T) ois.readObject();
         }
     }
 

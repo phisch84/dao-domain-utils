@@ -60,10 +60,16 @@ abstract public class AbstractCachedObject<T extends Serializable> implements Ca
      */
     abstract protected T load() throws Exception;
 
-    /**    (non-Javadoc)
+    /**
+     * Returns the object if it is still in memory, otherwise loads it with {@link #load()} and keeps it weakly again.
+     * Runs while holding {@link #objRefLock}, so concurrent calls get the same instance.
      *
      * @see com.schoste.ddd.util.CachedObject#get()
+     * @return the cached object
+     * @throws IllegalStateException if the instance was closed or not initialized
+     * @throws Exception re-throws every exception of {@link #load()}
      */
+    @Override
     public T get() throws IllegalStateException, Exception
     {
         synchronized (this.objRefLock)
@@ -84,10 +90,15 @@ abstract public class AbstractCachedObject<T extends Serializable> implements Ca
         }
     }
 
-    /**    (non-Javadoc)
+    /**
+     * Saves the object with {@link #save(Serializable)} if it is still in memory; does nothing if it was
+     * garbage collected (the storage keeps the last saved state). Runs while holding {@link #objRefLock}.
      *
      * @see com.schoste.ddd.util.CachedObject#commit()
+     * @throws IllegalStateException if the instance was closed or not initialized
+     * @throws Exception re-throws every exception of {@link #save(Serializable)}
      */
+    @Override
     public void commit() throws IllegalStateException, Exception
     {
         synchronized (this.objRefLock)
@@ -103,16 +114,24 @@ abstract public class AbstractCachedObject<T extends Serializable> implements Ca
         }
     }
 
-    /**    (non-Javadoc)
+    /**
+     * Creates a clone with its own storage and its own copy of the current object, including changes which were not
+     * saved yet (see {@link com.schoste.ddd.util.CachedObject#clone()}). Implemented by the deriving class, because
+     * the storage is.
      *
-     * @see java.lang.Object#clone()
+     * @return a clone of this instance
+     * @throws CloneNotSupportedException if cloning failed, with the original exception as cause
      */
     @Override
     abstract public Object clone() throws CloneNotSupportedException;
 
-    /**    (non-Javadoc)
+    /**
+     * Returns the hash code which the object had when this instance was created (see
+     * {@link com.schoste.ddd.util.CachedObject#hashCode()}). Never reads from the storage, so it also works after
+     * {@code close()}.
      *
-     * @see com.schoste.ddd.util.CachedObject#hashCode()
+     * @return the hash code of the cached object, obtained when this instance was created
+     * @throws IllegalStateException if the deriving class didn't set {@link #objHashCode}
      */
     @Override
     public int hashCode() throws IllegalStateException
@@ -122,9 +141,12 @@ abstract public class AbstractCachedObject<T extends Serializable> implements Ca
         return this.objHashCode;
     }
 
-    /**    (non-Javadoc)
+    /**
+     * Compares the cached objects (see {@link com.schoste.ddd.util.CachedObject#equals(Object)}). Implemented by the
+     * deriving class; it must return false, without throwing or writing output, if an object can't be read.
      *
-     * @see java.lang.Object#equals(java.lang.Object)
+     * @param other the object to compare to
+     * @return true if other is a cached object whose object is equal to the object of this instance
      */
     @Override
     abstract public boolean equals(Object other);
