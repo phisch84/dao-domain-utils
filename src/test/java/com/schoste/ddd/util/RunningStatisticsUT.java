@@ -89,6 +89,58 @@ public class RunningStatisticsUT
     }
 
     /**
+     * Asserts the values of two data points (1 and 3), the smallest number for which the sample variance is defined:
+     * population variance 1, sample variance 2.
+     */
+    @Test
+    public void testTwoDataPoints()
+    {
+        RunningStatistics stats = of(1, 3);
+
+        assertClose("population variance", 1.0, stats.getPopulationVariance());
+        assertClose("sample variance", 2.0, stats.getSampleVariance());
+        assertClose("sample standard deviation", Math.sqrt(2.0), stats.getSampleStandardDeviation());
+    }
+
+    /**
+     * Asserts that the sum is compensated (Kahan summation, like {@link java.util.DoubleSummaryStatistics}), also when
+     * combining. The step between doubles is 2.2e-16 above 1.0 and 1.1e-16 below it; the values are compared exactly.
+     * <ul>
+     * <li>1.0 + 1e-16 rounds to 1.0; applying the compensation (-1e-16) with the wrong sign gives the double below 1.0.</li>
+     * <li>1e-16 combined with (1.0 + 1e-16) is exactly 1 + 2e-16, which is closest to the double above 1.0. Adding the
+     *     values without compensation, or combining without the other's compensation, gives 1.0.</li>
+     * </ul>
+     */
+    @Test
+    public void testSumIsCompensated()
+    {
+        Assert.assertEquals(1.0, of(1.0, 1e-16).getSum(), 0.0);
+
+        Assert.assertEquals("the test data needs compensation", 1.0, (1e-16 + 1.0) + 1e-16, 0.0);
+
+        RunningStatistics combined = of(1e-16);
+
+        combined.combine(of(1.0, 1e-16));
+
+        Assert.assertEquals(Math.nextUp(1.0), combined.getSum(), 0.0);
+    }
+
+    /**
+     * Asserts that combining with an infinite sum gives an infinite sum (the compensation of an infinite sum is NaN, so
+     * the uncompensated sum must be combined too).
+     */
+    @Test
+    public void testCombineWithInfiniteSum()
+    {
+        RunningStatistics stats = of(1);
+
+        stats.combine(of(Double.POSITIVE_INFINITY));
+
+        Assert.assertEquals(Double.POSITIVE_INFINITY, stats.getSum(), 0.0);
+        Assert.assertEquals(Double.POSITIVE_INFINITY, stats.getMax(), 0.0);
+    }
+
+    /**
      * Asserts the statistics of the example in the class Javadoc (2, 4, 9) and of a textbook data set
      * (2, 4, 4, 4, 5, 5, 7, 9: mean 5, population variance 4, population standard deviation 2).
      */

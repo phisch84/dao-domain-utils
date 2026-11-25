@@ -1,6 +1,9 @@
 package com.schoste.ddd.util;
 
+import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.util.Locale;
 import java.util.function.DoubleConsumer;
 
 /**
@@ -53,7 +56,11 @@ import java.util.function.DoubleConsumer;
  *     {@link java.util.DoubleSummaryStatistics}, because the statistics change with every data point.</li>
  * </ul>
  * <p>
- * Not implemented yet: the methods throw {@link UnsupportedOperationException}.
+ * Implementation: {@link #accept(double)} updates the mean and the sum of the squared deviations from the mean with
+ * Welford's algorithm; {@link #combine(RunningStatistics)} merges them with the formula of Chan et al. The sum uses
+ * compensated (Kahan) summation, like {@link java.util.DoubleSummaryStatistics}. Every method is {@code synchronized} on
+ * the instance; {@link #combine(RunningStatistics)} first copies the other instance (holding only its lock), then
+ * merges the copy (holding only this one's), so it never holds two locks and can't deadlock.
  * </p>
  */
 public class RunningStatistics implements DoubleConsumer, Serializable, Cloneable
@@ -62,20 +69,82 @@ public class RunningStatistics implements DoubleConsumer, Serializable, Cloneabl
     private static final long serialVersionUID = 42L;
 
     /**
+     * The number of data points.
+     */
+    private long count;
+
+    /**
+     * The mean of the data points; 0 while there are none.
+     */
+    private double mean;
+
+    /**
+     * The sum of the squared deviations of the data points from their mean (Welford's M2).
+     */
+    private double squaredDeviations;
+
+    /**
+     * The sum of the data points, without the rounding error in {@link #sumCompensation}.
+     */
+    private double sum;
+
+    /**
+     * The rounding error of {@link #sum} (Kahan summation): the exact sum is about {@code sum - sumCompensation}.
+     */
+    private double sumCompensation;
+
+    /**
+     * The sum of the data points without compensation; returned by {@link #getSum()} if the compensated sum is NaN
+     * because of infinite data points.
+     */
+    private double simpleSum;
+
+    /**
+     * The smallest data point; {@link Double#POSITIVE_INFINITY} while there are none.
+     */
+    private double min = Double.POSITIVE_INFINITY;
+
+    /**
+     * The largest data point; {@link Double#NEGATIVE_INFINITY} while there are none.
+     */
+    private double max = Double.NEGATIVE_INFINITY;
+
+    /**
      * Creates an instance without data points.
      */
     public RunningStatistics() { }
 
     /**
+     * Adds a value to {@link #sum} with Kahan summation (like {@link java.util.DoubleSummaryStatistics}).
+     */
+    private void addToSum(double value)
+    {
+        double corrected = value - this.sumCompensation;
+        double newSum = this.sum + corrected;
+
+        this.sumCompensation = (newSum - this.sum) - corrected;
+        this.sum = newSum;
+    }
+
+    /**
      * Adds a data point to the statistics.
      *
      * @param value the data point
-     * @throws UnsupportedOperationException always (not implemented yet)
      */
     @Override
-    public void accept(double value) throws UnsupportedOperationException
+    public synchronized void accept(double value)
     {
-        throw new UnsupportedOperationException("not implemented yet");
+        this.count++;
+
+        double delta = value - this.mean;
+
+        this.mean += delta / this.count;
+        this.squaredDeviations += delta * (value - this.mean);
+
+        this.simpleSum += value;
+        this.addToSum(value);
+        this.min = Math.min(this.min, value);
+        this.max = Math.max(this.max, value);
     }
 
     /**
@@ -84,66 +153,95 @@ public class RunningStatistics implements DoubleConsumer, Serializable, Cloneabl
      *
      * @param other the statistics to add, not null
      * @throws NullPointerException if other is null
-     * @throws UnsupportedOperationException always (not implemented yet)
      */
-    public void combine(RunningStatistics other) throws NullPointerException, UnsupportedOperationException
+    public void combine(RunningStatistics other) throws NullPointerException
     {
-        throw new UnsupportedOperationException("not implemented yet");
+        if (other == null) throw new NullPointerException("other");
+
+        // copied while holding only the other's lock; merged while holding only this one's
+        this.merge(other.clone());
+    }
+
+    /**
+     * Merges a copy of other statistics into this one (Chan et al.), while holding this instance's lock.
+     */
+    private synchronized void merge(RunningStatistics other)
+    {
+        if (other.count == 0) return;
+
+        if (this.count == 0)
+        {
+            this.mean = other.mean;
+            this.squaredDeviations = other.squaredDeviations;
+        }
+        else
+        {
+            double total = (double) this.count + other.count;
+            double delta = other.mean - this.mean;
+
+            this.mean += delta * (other.count / total);
+            this.squaredDeviations += other.squaredDeviations + delta * delta * (this.count * (other.count / total));
+        }
+
+        this.count += other.count;
+        this.simpleSum += other.simpleSum;
+        this.addToSum(other.sum);
+        this.addToSum(-other.sumCompensation);
+        this.min = Math.min(this.min, other.min);
+        this.max = Math.max(this.max, other.max);
     }
 
     /**
      * Returns the number of data points.
      *
      * @return the number of data points
-     * @throws UnsupportedOperationException always (not implemented yet)
      */
-    public long getCount() throws UnsupportedOperationException
+    public synchronized long getCount()
     {
-        throw new UnsupportedOperationException("not implemented yet");
+        return this.count;
     }
 
     /**
      * Returns the sum of the data points.
      *
      * @return the sum, or 0 if there are no data points
-     * @throws UnsupportedOperationException always (not implemented yet)
      */
-    public double getSum() throws UnsupportedOperationException
+    public synchronized double getSum()
     {
-        throw new UnsupportedOperationException("not implemented yet");
+        double compensated = this.sum - this.sumCompensation;
+
+        // the compensation of an infinite sum is NaN; the simple sum is right then (like DoubleSummaryStatistics)
+        return (Double.isNaN(compensated) && Double.isInfinite(this.simpleSum)) ? this.simpleSum : compensated;
     }
 
     /**
      * Returns the smallest data point.
      *
      * @return the minimum, or {@link Double#POSITIVE_INFINITY} if there are no data points
-     * @throws UnsupportedOperationException always (not implemented yet)
      */
-    public double getMin() throws UnsupportedOperationException
+    public synchronized double getMin()
     {
-        throw new UnsupportedOperationException("not implemented yet");
+        return this.min;
     }
 
     /**
      * Returns the largest data point.
      *
      * @return the maximum, or {@link Double#NEGATIVE_INFINITY} if there are no data points
-     * @throws UnsupportedOperationException always (not implemented yet)
      */
-    public double getMax() throws UnsupportedOperationException
+    public synchronized double getMax()
     {
-        throw new UnsupportedOperationException("not implemented yet");
+        return this.max;
     }
 
     /**
      * Returns the arithmetic mean of the data points.
      *
      * @return the mean, or {@link Double#NaN} if there are no data points
-     * @throws UnsupportedOperationException always (not implemented yet)
      */
-    public double getMean() throws UnsupportedOperationException
+    public synchronized double getMean()
     {
-        throw new UnsupportedOperationException("not implemented yet");
+        return (this.count == 0) ? Double.NaN : this.mean;
     }
 
     /**
@@ -151,11 +249,10 @@ public class RunningStatistics implements DoubleConsumer, Serializable, Cloneabl
      * divided by the number of data points.
      *
      * @return the population variance, or {@link Double#NaN} if there are no data points
-     * @throws UnsupportedOperationException always (not implemented yet)
      */
-    public double getPopulationVariance() throws UnsupportedOperationException
+    public synchronized double getPopulationVariance()
     {
-        throw new UnsupportedOperationException("not implemented yet");
+        return (this.count == 0) ? Double.NaN : this.squaredDeviations / this.count;
     }
 
     /**
@@ -163,11 +260,10 @@ public class RunningStatistics implements DoubleConsumer, Serializable, Cloneabl
      * from the mean, divided by the number of data points minus one (Bessel's correction).
      *
      * @return the sample variance, or {@link Double#NaN} if there are fewer than two data points
-     * @throws UnsupportedOperationException always (not implemented yet)
      */
-    public double getSampleVariance() throws UnsupportedOperationException
+    public synchronized double getSampleVariance()
     {
-        throw new UnsupportedOperationException("not implemented yet");
+        return (this.count < 2) ? Double.NaN : this.squaredDeviations / (this.count - 1);
     }
 
     /**
@@ -175,22 +271,20 @@ public class RunningStatistics implements DoubleConsumer, Serializable, Cloneabl
      * {@link #getPopulationVariance()}.
      *
      * @return the population standard deviation, or {@link Double#NaN} if there are no data points
-     * @throws UnsupportedOperationException always (not implemented yet)
      */
-    public double getPopulationStandardDeviation() throws UnsupportedOperationException
+    public double getPopulationStandardDeviation()
     {
-        throw new UnsupportedOperationException("not implemented yet");
+        return Math.sqrt(this.getPopulationVariance());
     }
 
     /**
      * Returns the standard deviation of the data points as a sample: the square root of {@link #getSampleVariance()}.
      *
      * @return the sample standard deviation, or {@link Double#NaN} if there are fewer than two data points
-     * @throws UnsupportedOperationException always (not implemented yet)
      */
-    public double getSampleStandardDeviation() throws UnsupportedOperationException
+    public double getSampleStandardDeviation()
     {
-        throw new UnsupportedOperationException("not implemented yet");
+        return Math.sqrt(this.getSampleVariance());
     }
 
     /**
@@ -198,22 +292,46 @@ public class RunningStatistics implements DoubleConsumer, Serializable, Cloneabl
      * being copied). Adding data points to one instance doesn't change the other.
      *
      * @return a copy of this instance
-     * @throws UnsupportedOperationException always (not implemented yet)
      */
     @Override
-    public RunningStatistics clone() throws UnsupportedOperationException
+    public synchronized RunningStatistics clone()
     {
-        throw new UnsupportedOperationException("not implemented yet");
+        try
+        {
+            return (RunningStatistics) super.clone();
+        }
+        catch (CloneNotSupportedException e)
+        {
+            throw new AssertionError("RunningStatistics is Cloneable", e);
+        }
     }
 
     /**
-     * Lists the statistics, like {@link java.util.DoubleSummaryStatistics#toString()}, plus the variances.
+     * Lists the statistics like {@link java.util.DoubleSummaryStatistics#toString()}, plus the variances, taken from a
+     * consistent snapshot. The numbers always use a decimal point, independent of the default locale.
      *
      * @return the class name and the statistics
      */
     @Override
     public String toString()
     {
-        return this.getClass().getSimpleName() + "{not implemented yet}";
+        RunningStatistics snapshot = this.clone();
+
+        return String.format(Locale.ROOT, "%s{count=%d, sum=%f, min=%f, mean=%f, max=%f, populationVariance=%f, sampleVariance=%f}",
+                             this.getClass().getSimpleName(), snapshot.getCount(), snapshot.getSum(), snapshot.getMin(),
+                             snapshot.getMean(), snapshot.getMax(), snapshot.getPopulationVariance(), snapshot.getSampleVariance());
+    }
+
+    /**
+     * Writes the statistics while holding the lock, so another thread can't add data points while the instance is
+     * being serialized.
+     *
+     * @serialData the default serializable fields (count, mean, squared deviations, sums, minimum and maximum)
+     * @param out the stream to write to
+     * @throws IOException if writing to the stream failed
+     */
+    private synchronized void writeObject(ObjectOutputStream out) throws IOException
+    {
+        out.defaultWriteObject();
     }
 }
