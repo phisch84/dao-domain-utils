@@ -158,6 +158,7 @@ abstract public class AbstractCachedHashMap<K, V extends Serializable> extends A
     /**
      * Wraps the value in a new {@link com.schoste.ddd.util.CachedObject}, saves it and adds it to the map.
      * Call it again to save changes to the value. The previous value of the key is closed, which frees its storage.
+     * If saving fails, the new {@link com.schoste.ddd.util.CachedObject} is closed and the previous value stays in the map.
      *
      * @param key the key of the value
      * @param value the value to add, must not be null
@@ -174,7 +175,23 @@ abstract public class AbstractCachedHashMap<K, V extends Serializable> extends A
         {
             CachedObject<V> cachedValue = this.createCachedObject(value);
 
-            cachedValue.commit();
+            try
+            {
+                cachedValue.commit();
+            }
+            catch (Exception e)
+            {
+                // the new value never gets into the map, so nothing else would free its storage
+                try
+                {
+                    cachedValue.close();
+                }
+                catch (IOException closeFailure)
+                {
+                    e.addSuppressed(closeFailure);
+                }
+                throw e;
+            }
 
             return this.getValueAndClose(this.cachedValues.put(key, cachedValue));
         }

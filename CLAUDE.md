@@ -42,6 +42,8 @@ User-facing documentation is in `README.md`; the contract of each class is its J
 | `src/main/java/com/schoste/ddd/util/fs/CachedNestedHashMapImpl.java` | A `CachedHashMapImpl` per level in `storagePath`; `commit`/`close`/`cloneValueMap` |
 | `src/test/java/com/schoste/ddd/util/CachedObjectUT.java` | Contract test for every `CachedObject` implementation |
 | `src/test/java/com/schoste/ddd/util/CachedHashMapUT.java` | Contract test for every `CachedHashMap` implementation |
+| `src/test/java/com/schoste/ddd/util/AbstractCachedHashMapUT.java` | Storage errors of `AbstractCachedHashMap` (with `FailingCachedObject`) |
+| `src/test/java/com/schoste/ddd/util/FailingCachedObject.java` | Test double: in-memory `CachedObject` whose `get`/`commit`/`close`/`clone` can be made to fail |
 | `src/test/java/com/schoste/ddd/util/NestedMapUT.java` | Contract test for every `NestedMap` implementation |
 | `src/test/java/com/schoste/ddd/util/CachedNestedMapUT.java` | Contract test for every `CachedNestedMap` (extends `NestedMapUT`) |
 | `src/test/java/com/schoste/ddd/util/NestedHashMapUT.java` | Factory for `NestedMapUT` + `NestedHashMap` specific tests |
@@ -102,7 +104,9 @@ Checklist for a new utility or implementation:
 - Values live in `protected HashMap<K, CachedObject<V>> cachedValues`; `AbstractCachedHashMap` extends
   `java.util.AbstractMap` and reuses it wherever possible. `cachedValues` is not `final` only because
   `clone()` replaces it.
-- `put(k, v)` wraps the value in a new `CachedObject` and commits it. Calling `put` again is how a single
+- `put(k, v)` wraps the value in a new `CachedObject` and commits it; if the commit fails, the new `CachedObject`
+  is closed and the previous value stays. If the previous value can't be loaded to be returned, it is still
+  replaced and closed, and `put` throws. Calling `put` again is how a single
   changed value is saved; `commit()` saves all values that are in memory.
 - Null values are rejected with `NullPointerException` (a `CachedObject` can't hold null); null keys are allowed.
 - `Map` methods can't throw checked exceptions: storage errors become `IllegalStateException` with the
@@ -179,6 +183,9 @@ Checklist for a new utility or implementation:
 - Helpers in `CachedNestedMapUT`: `valueMapsOf(map)`, `simulateGC(map)`, `cachedValuesOf(map)`,
   `cachedValueWith(map, value)`. Its generic factory `createCachedNestedMap()` lets tests use mutable values
   (`ArrayList`), while `NestedMapUT` uses `String` values.
+- Test error paths with `FailingCachedObject`: set `failOnGet`/`failOnCommit`/`failOnClose`/`failOnClone`;
+  `closeCalled`, `closed` and `clones` show what the code under test did. `AbstractCachedHashMapUT.TestMap`
+  wraps every value in one and lists them in `created`.
 - Helper in `CachedObjectUT`: `closeWhileBlockedOnLock(operation)` closes an instance while the operation waits
   for `objRefLock` in another thread.
 - Don't rely on thread timing either: make races deterministic by holding the lock until the other thread is

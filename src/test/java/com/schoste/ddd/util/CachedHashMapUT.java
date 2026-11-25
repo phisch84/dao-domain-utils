@@ -5,9 +5,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.lang.ref.WeakReference;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -680,6 +682,99 @@ abstract public class CachedHashMapUT
 
             Assert.assertEquals(expected, new HashMap<>(testMap));
             Assert.assertEquals(expected.keySet(), testMap.keySet());
+        }
+    }
+
+    /**
+     * Asserts that {@link java.util.Map.Entry#setValue(Object)} of an entry of {@link java.util.Map#entrySet()}
+     * <ul>
+     * <li>returns the previous value and saves the new one like {@link java.util.Map#put(Object, Object)},</li>
+     * <li>closes the previous value,</li>
+     * <li>and doesn't break the iteration (replacing a value is no structural change).</li>
+     * </ul>
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testEntrySetValueSavesValueAndClosesPreviousValue() throws Exception
+    {
+        try (CachedHashMap<String, ArrayList<String>> testMap = this.createCachedMap())
+        {
+            testMap.put("one", list("1"));
+            testMap.put("two", list("2"));
+
+            CachedObject<?> previousValue = cachedValueOf(testMap, "one");
+            int iterated = 0;
+
+            for (Map.Entry<String, ArrayList<String>> entry : testMap.entrySet())
+            {
+                iterated++;
+
+                if (entry.getKey().equals("one")) Assert.assertEquals(list("1"), entry.setValue(list("changed")));
+            }
+
+            Assert.assertEquals(2, iterated);
+            assertClosed(previousValue);
+
+            simulateGC(testMap);
+
+            Assert.assertEquals(list("changed"), testMap.get("one"));
+            Assert.assertEquals(list("2"), testMap.get("two"));
+        }
+    }
+
+    /**
+     * Asserts that {@link java.util.Iterator#remove()} after {@link java.util.Map.Entry#setValue(Object)}
+     * closes the new value, i.e. the one which was in the map when it was removed.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testEntryIteratorRemoveAfterSetValueClosesNewValue() throws Exception
+    {
+        try (CachedHashMap<String, ArrayList<String>> testMap = this.createCachedMap())
+        {
+            testMap.put("one", list("1"));
+
+            Iterator<Map.Entry<String, ArrayList<String>>> entries = testMap.entrySet().iterator();
+
+            entries.next().setValue(list("changed"));
+
+            CachedObject<?> newValue = cachedValueOf(testMap, "one");
+
+            entries.remove();
+
+            assertClosed(newValue);
+            Assert.assertTrue(testMap.isEmpty());
+        }
+    }
+
+    /**
+     * Asserts that an entry of {@link java.util.Map#entrySet()} follows the contract of {@link java.util.Map.Entry}:
+     * it is equal to (and has the same hash code and string as) any entry with an equal key and value,
+     * and is not equal to entries with another value, nor to objects which are no entry.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @SuppressWarnings("unlikely-arg-type")
+    @Test
+    public void testEntryEqualsHashCodeAndToString() throws Exception
+    {
+        try (CachedHashMap<String, ArrayList<String>> testMap = this.createCachedMap())
+        {
+            testMap.put("one", list("1"));
+            simulateGC(testMap);
+
+            Map.Entry<String, ArrayList<String>> entry = testMap.entrySet().iterator().next();
+            Map.Entry<String, ArrayList<String>> expected = new AbstractMap.SimpleEntry<>("one", list("1"));
+
+            Assert.assertTrue(entry.equals(expected));
+            Assert.assertTrue(expected.equals(entry));
+            Assert.assertEquals(expected.hashCode(), entry.hashCode());
+            Assert.assertEquals(expected.toString(), entry.toString());
+            Assert.assertFalse(entry.equals(new AbstractMap.SimpleEntry<>("one", list("other"))));
+            Assert.assertFalse(entry.equals(new AbstractMap.SimpleEntry<>("other", list("1"))));
+            Assert.assertFalse(entry.equals("one=[1]"));
         }
     }
 }
