@@ -240,6 +240,8 @@ Checklist for a new utility or implementation:
 
 ## Working in this repository
 
+- `AGENTS.md` points other AI agents to this file and repeats only its essentials. When those change here
+  (definition of done, Java 8, working mode), update `AGENTS.md` too.
 - Work in small, independently committable steps; the maintainer reviews and commits each one.
   Ask before changing a design decision above, and offer options with a recommendation.
 - Environment: Windows with Git Bash and PowerShell. In Git Bash, `grep $'\r'` doesn't work (MSYS drops

@@ -273,7 +273,8 @@ mvn clean test-compile org.pitest:pitest-maven:mutationCoverage
 ```
 
 The report is written to `target/pit-reports/index.html`.
-Contributor and AI-assistant notes (architecture, design decisions, conventions) are in [CLAUDE.md](CLAUDE.md).
+Contributor and AI-assistant notes (architecture, design decisions, conventions) are in [CLAUDE.md](CLAUDE.md);
+[AGENTS.md](AGENTS.md) points other AI agents there.
 
 ## License
 
