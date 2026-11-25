@@ -120,6 +120,11 @@ Checklist for a new utility or implementation:
   share a file. Never check-then-create (`exists()` + write) or use fixed helper file names in the folder
   (tested by `testConcurrentCreationInSameFolder`). If writing the new file fails (e.g. not serializable), the
   constructor deletes and unregisters it before rethrowing (`testConstructorDeletesCacheFileIfWritingFails`).
+- On Windows, `Files.createFile` fails with `AccessDeniedException` (not `FileAlreadyExistsException`) while another
+  thread deletes a file of the same name. The constructor then tries the next name too, but at most
+  `MAX_ACCESS_DENIED_RETRIES` (100) times, because an unwritable folder denies every name
+  (`testConcurrentCreationAndCloseInSameFolder`; the limit is tested by `testUnwritableFolderIsRejected`, which needs
+  POSIX permissions and is skipped on Windows, so it runs only on CI).
 - Serialization of `fs.CachedObjectImpl` writes only `cacheFilePath` and `objHashCode`, never the cached object.
   `readObject` loads the object once (into the weak reference).
 

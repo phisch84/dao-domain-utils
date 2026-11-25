@@ -3,6 +3,7 @@ package com.schoste.ddd.util.fs;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.nio.file.AccessDeniedException;
 import java.io.NotSerializableException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -10,6 +11,7 @@ import java.io.PrintStream;
 import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -23,6 +25,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.Assert;
+import org.junit.Assume;
 import org.junit.Test;
 
 import com.schoste.ddd.util.CachedObject;
@@ -352,6 +355,86 @@ public class CachedObjectImplUT extends CachedObjectUT
 
             for (CachedObjectImpl<String> obj : createdObjs) obj.close();
 
+            TestHelpers.deleteRecursively(storagePath.toFile());
+        }
+    }
+
+    /**
+     * Asserts that creating and closing instances concurrently in the same folder doesn't fail. On Windows, creating a
+     * file fails with {@link AccessDeniedException} (instead of {@link java.nio.file.FileAlreadyExistsException}) while
+     * another thread deletes a file of the same name; the constructor must then try the next name. The race depends on
+     * timing, so the test repeats it many times.
+     *
+     * @throws Exception re-throws every exception, also of the threads
+     */
+    @Test
+    public void testConcurrentCreationAndCloseInSameFolder() throws Exception
+    {
+        final int threadCount = 8;
+        final int iterations = 300;
+        final Path storagePath = Files.createTempDirectory("testConcurrentCreationAndCloseInSameFolder");
+        final CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+
+        try
+        {
+            List<Future<?>> results = new ArrayList<>();
+
+            for (int t = 0; t < threadCount; t++)
+            {
+                results.add(executor.submit(() ->
+                {
+                    start.await();
+
+                    for (int i = 0; i < iterations; i++)
+                    {
+                        new CachedObjectImpl<String>("value", storagePath.toString()).close();
+                    }
+                    return null;
+                }));
+            }
+
+            start.countDown();
+
+            for (Future<?> result : results) result.get(60, TimeUnit.SECONDS);
+
+            Assert.assertEquals(0, TestHelpers.countFiles(storagePath.toFile()));
+        }
+        finally
+        {
+            executor.shutdownNow();
+            executor.awaitTermination(60, TimeUnit.SECONDS);
+            TestHelpers.deleteRecursively(storagePath.toFile());
+        }
+    }
+
+    /**
+     * Asserts that the constructor gives up with {@link AccessDeniedException} for a folder which denies creating files,
+     * instead of trying the next name forever. Needs POSIX permissions to make the folder unwritable, so it is skipped
+     * on Windows (and when running as a user who may write anyway, e.g. root).
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test(timeout = 30000)
+    public void testUnwritableFolderIsRejected() throws Exception
+    {
+        Path storagePath = Files.createTempDirectory("testUnwritableFolderIsRejected");
+
+        try
+        {
+            Assume.assumeTrue("needs POSIX permissions", storagePath.getFileSystem().supportedFileAttributeViews().contains("posix"));
+
+            Files.setPosixFilePermissions(storagePath, PosixFilePermissions.fromString("r-xr-xr-x"));
+
+            Assume.assumeFalse("the folder is still writable (e.g. running as root)", Files.isWritable(storagePath));
+            Assert.assertThrows(AccessDeniedException.class, () -> new CachedObjectImpl<String>("value", storagePath.toString()));
+        }
+        finally
+        {
+            if (storagePath.getFileSystem().supportedFileAttributeViews().contains("posix"))
+            {
+                Files.setPosixFilePermissions(storagePath, PosixFilePermissions.fromString("rwxr-xr-x"));
+            }
             TestHelpers.deleteRecursively(storagePath.toFile());
         }
     }

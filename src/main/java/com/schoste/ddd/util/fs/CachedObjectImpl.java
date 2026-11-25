@@ -9,6 +9,7 @@ import java.io.ObjectOutputStream;
 import java.io.ObjectStreamField;
 import java.io.Serializable;
 import java.lang.ref.WeakReference;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -67,6 +68,12 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         }
     }
 
+    /**
+     * How often creating a cache file may fail with {@link AccessDeniedException} before the constructor gives up
+     * (see {@link #initializeCacheFile(String, Object)}).
+     */
+    static final int MAX_ACCESS_DENIED_RETRIES = 100;
+
     static private String initializeCacheFileFolder(String storagePath) throws IllegalArgumentException, IllegalStateException, Exception
     {
         if (storagePath == null) throw new IllegalArgumentException("storagePath");
@@ -83,6 +90,9 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
      * Creates a new cache file in the folder and writes the object into it.
      * The file is created atomically ({@link Files#createFile}), so concurrent callers,
      * also in other JVMs, never get the same file. Creating it also checks that the folder is writable.
+     * If the name is taken, the next one is tried. On Windows, creating a file also fails with
+     * {@link AccessDeniedException} while another thread deletes a file of the same name, so that is retried with the
+     * next name too, but at most {@link #MAX_ACCESS_DENIED_RETRIES} times: a folder which denies writing denies every name.
      * If writing fails (e.g. the object isn't serializable), the file is deleted again and the failure is thrown.
      */
     static private <T> File initializeCacheFile(String storagePath, T obj) throws IllegalArgumentException, Exception
@@ -90,6 +100,7 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         if (obj == null) throw new IllegalArgumentException();
 
         long cacheFileName = System.currentTimeMillis();
+        int accessDenied = 0;
         File cacheFile = null;
 
         while (cacheFile == null)
@@ -102,6 +113,12 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
             }
             catch (FileAlreadyExistsException e)
             {
+                cacheFileName++;
+            }
+            catch (AccessDeniedException e)
+            {
+                if (++accessDenied > MAX_ACCESS_DENIED_RETRIES) throw e;
+
                 cacheFileName++;
             }
         }

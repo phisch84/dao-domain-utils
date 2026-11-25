@@ -10,6 +10,13 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Assert;
 import org.junit.Assume;
@@ -601,6 +608,104 @@ abstract public class CachedQueueUT
             clone.close();
 
             Assert.assertEquals(Arrays.asList("a", "b", "d"), new ArrayList<>(queue));
+        }
+    }
+
+    /**
+     * Asserts that the queue is thread-safe: several producers offer and several consumers poll at the same time, while
+     * another thread keeps iterating, peeking and asking for the size. Every element must be polled exactly once, no
+     * thread may throw (iterators never throw {@link java.util.ConcurrentModificationException}), and the queue must be
+     * empty at the end. The test doesn't depend on timing; it only checks the results.
+     *
+     * @throws Exception re-throws every exception, also of the threads
+     */
+    @Test
+    public void testConcurrentOfferPollAndIteration() throws Exception
+    {
+        final int producers = 4;
+        final int elementsPerProducer = 250;
+        final int consumers = 4;
+
+        try (CachedQueue<String> queue = this.createCachedQueue())
+        {
+            final CountDownLatch start = new CountDownLatch(1);
+            final AtomicBoolean producersDone = new AtomicBoolean();
+            final AtomicBoolean consumersDone = new AtomicBoolean();
+            final ConcurrentHashMap<String, Integer> received = new ConcurrentHashMap<>();
+            ExecutorService executor = Executors.newFixedThreadPool(producers + consumers + 1);
+
+            try
+            {
+                List<Future<?>> producerResults = new ArrayList<>();
+                List<Future<?>> consumerResults = new ArrayList<>();
+
+                for (int p = 0; p < producers; p++)
+                {
+                    final int producer = p;
+
+                    producerResults.add(executor.submit(() ->
+                    {
+                        start.await();
+
+                        for (int i = 0; i < elementsPerProducer; i++) queue.offer(producer + "-" + i);
+
+                        return null;
+                    }));
+                }
+                for (int c = 0; c < consumers; c++)
+                {
+                    consumerResults.add(executor.submit(() ->
+                    {
+                        start.await();
+
+                        while (!Thread.currentThread().isInterrupted())
+                        {
+                            String element = queue.poll();
+
+                            if (element != null) received.merge(element, 1, Integer::sum);
+                            else if (producersDone.get() && queue.isEmpty()) return null;
+                        }
+                        return null;
+                    }));
+                }
+
+                Future<?> observer = executor.submit(() ->
+                {
+                    start.await();
+
+                    while (!consumersDone.get() && !Thread.currentThread().isInterrupted())
+                    {
+                        for (String element : queue) Assert.assertNotNull(element);
+
+                        queue.peek();
+                        Assert.assertTrue(queue.size() >= 0);
+                    }
+                    return null;
+                });
+
+                start.countDown();
+
+                for (Future<?> result : producerResults) result.get(60, TimeUnit.SECONDS);
+
+                producersDone.set(true);
+
+                for (Future<?> result : consumerResults) result.get(60, TimeUnit.SECONDS);
+
+                consumersDone.set(true);
+                observer.get(60, TimeUnit.SECONDS);
+            }
+            finally
+            {
+                // the threads stop when interrupted, so an exception of the try block isn't hidden by waiting here
+                executor.shutdownNow();
+                executor.awaitTermination(60, TimeUnit.SECONDS);
+            }
+
+            Assert.assertEquals(producers * elementsPerProducer, received.size());
+
+            for (Integer count : received.values()) Assert.assertEquals(Integer.valueOf(1), count);
+
+            Assert.assertTrue(queue.isEmpty());
         }
     }
 }

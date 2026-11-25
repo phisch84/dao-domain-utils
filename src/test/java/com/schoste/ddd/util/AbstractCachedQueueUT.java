@@ -391,4 +391,51 @@ public class AbstractCachedQueueUT
         Assert.assertEquals(Arrays.asList("b"), new ArrayList<>(clone));
         Assert.assertEquals(Arrays.asList("b"), new ArrayList<>(queue));
     }
+
+    /**
+     * Asserts that every method releases the lock before it returns, also on the paths for elements removed by another
+     * thread meanwhile. A method which keeps the lock would block every other thread forever; checking
+     * {@link java.util.concurrent.locks.ReentrantLock#isLocked()} after each call finds that without threads or timing.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testEveryMethodReleasesTheLock() throws Exception
+    {
+        TestQueue queue = TestQueue.of("a", "b", "c", "d");
+        List<String> notReleased = new ArrayList<>();
+        String[] names =
+        {
+            "offer", "size", "peek", "poll", "iterator", "iterator.remove", "commit", "clone", "serialization",
+            "peek of a head taken meanwhile", "clear",
+        };
+        Runnable[] calls =
+        {
+            () -> queue.offer("e"),
+            queue::size,
+            queue::peek,
+            queue::poll,
+            () -> queue.iterator().next(),
+            () -> { Iterator<String> elements = queue.iterator(); elements.next(); elements.remove(); },
+            () -> { try { queue.commit(); } catch (Exception e) { throw new IllegalStateException(e); } },
+            () -> { try { queue.clone(); } catch (CloneNotSupportedException e) { throw new IllegalStateException(e); } },
+            () -> { try { TestHelpers.serializeAndDeserialize(queue); } catch (Exception e) { throw new IllegalStateException(e); } },
+            () ->
+            {
+                // the head is taken while peek loads it, so peek checks (with the lock) whether it's still in the queue
+                ((FailingCachedObject<String>) queue.cachedElements.peekFirst()).beforeNextAccess = queue::poll;
+                queue.peek();
+            },
+            queue::clear,
+        };
+
+        for (int i = 0; i < calls.length; i++)
+        {
+            calls[i].run();
+
+            if (queue.lock.isLocked()) notReleased.add(names[i]);
+        }
+
+        Assert.assertEquals("methods which keep the lock", new ArrayList<String>(), notReleased);
+    }
 }
