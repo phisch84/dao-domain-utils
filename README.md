@@ -113,6 +113,7 @@ try (CachedHashMap<String, ArrayList<String>> map = new CachedHashMapImpl<>("/va
 - **Serializing writes only references**: the keys, the storage path and the paths of the cache files, not the values.
   Call `commit()` before serializing. The deserialized map shares the cache files with the original,
   so closing or removing values in one of them affects the other one too. The keys must be `Serializable`.
+- **Not thread-safe**, like `java.util.HashMap`: synchronize access from several threads.
 
 ## NestedMap
 
@@ -161,6 +162,7 @@ map.size();                                       // 4: all values at any depth
 - **`clone()`** copies all levels; `NestedHashMap` shares the value instances with the clone (like `HashMap`).
   A sub map can't be cloned (`CloneNotSupportedException`).
 - **Serializable** if the keys and values are. A serialized sub map includes the whole map it is a view of.
+- **Not thread-safe**, like `java.util.HashMap`: synchronize access from several threads, also through sub maps.
 - `NestedMap` is not a `java.util.Map`, because a path has several keys.
 
 ## CachedNestedMap
@@ -241,7 +243,7 @@ To store data somewhere else than in files (e.g. a database), implement the abst
 
 | Type | Derive from | Implement |
 |---|---|---|
-| `CachedObject` | `AbstractCachedObject` | `save()`, `load()`, `clone()`, `equals()`, `close()` |
+| `CachedObject` | `AbstractCachedObject` | `save()`, `load()`, `clone()`, `equals()`, `close()` (sets `objRef` to `null` while holding `objRefLock`) |
 | `CachedHashMap` | `AbstractCachedHashMap` | `createCachedObject(V)`, which wraps a value in your `CachedObject` |
 | `NestedMap` | `AbstractNestedMap` | `createValueMap()`, the map for the values of one level; `cloneValueMap(Map)` if the values should not be shared by clones |
 | `CachedNestedMap` | `AbstractNestedMap` | as for `NestedMap`, returning your `CachedHashMap`; plus `commit()`, `close()` and `cloneValueMap(Map)` (see `fs.CachedNestedHashMapImpl`) |

@@ -35,6 +35,7 @@ import java.util.Map;
  * </li>
  * <li>Methods of {@link java.util.Map} can't throw checked exceptions; if the storage fails,
  *     they throw an {@link IllegalStateException} with the original exception as cause.</li>
+ * <li>The map is not thread-safe (like {@link java.util.HashMap}); synchronize access from several threads.</li>
  * </ul>
  *
  * @param <K> the class of the map's keys

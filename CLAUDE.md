@@ -65,6 +65,7 @@ Checklist for a new utility or implementation:
 - [ ] Javadoc for everything public/protected, including the usage rules in the interface.
 - [ ] `serialVersionUID` on serializable classes; decide what serialization writes.
 - [ ] Every way to remove or replace something frees its storage (`close()`).
+- [ ] Decide the thread safety and state it in the interface Javadoc and `README.md` (collections: not thread-safe).
 - [ ] `mvn -B clean verify` passes; update `README.md` (users) and this file (decisions, code map).
 
 ## Design decisions (don't change without asking)
@@ -175,6 +176,12 @@ Checklist for a new utility or implementation:
 - Helpers in `CachedNestedMapUT`: `valueMapsOf(map)`, `simulateGC(map)`, `cachedValuesOf(map)`,
   `cachedValueWith(map, value)`. Its generic factory `createCachedNestedMap()` lets tests use mutable values
   (`ArrayList`), while `NestedMapUT` uses `String` values.
+- Helper in `CachedObjectUT`: `closeWhileBlockedOnLock(operation)` closes an instance while the operation waits
+  for `objRefLock` in another thread.
+- Don't rely on thread timing either: make races deterministic by holding the lock until the other thread is
+  `BLOCKED` (see `closeWhileBlockedOnLock`). Where that isn't possible (file creation), start many threads at once
+  with a `CountDownLatch`, and check that the test fails on the old code every time.
+  Wait for the threads (`awaitTermination`) before cleaning up in `finally`.
 - `NestedMapUT` tests don't close cached maps; their few cache files are deleted by the shutdown hook.
 - Tests that need files use their own temporary folder (`Files.createTempDirectory`) and delete it in `finally`.
 

@@ -37,6 +37,8 @@ import java.util.Set;
  *     keys and values must be {@link java.io.Serializable} for serializing, otherwise it fails with a
  *     {@link java.io.NotSerializableException}. A serialized sub map ({@link #getSubMap(Object...)}) includes the whole
  *     map it is a view of. A sub map can't be cloned; clone the map instead.</li>
+ * <li>The map is not thread-safe (like {@link java.util.HashMap}); synchronize access from several threads,
+ *     also through sub maps, which share the levels of the map.</li>
  * </ul>
  *
  * @param <K> the class of the keys on every level
