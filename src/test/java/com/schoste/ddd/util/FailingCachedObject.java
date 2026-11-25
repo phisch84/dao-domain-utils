@@ -58,6 +58,18 @@ public class FailingCachedObject<V extends Serializable> implements CachedObject
     public boolean closeCalled;
 
     /**
+     * How often {@link #close()} was called, also if it failed.
+     */
+    public int closeCalls;
+
+    /**
+     * If not null, runs once at the start of the next {@link #get()} or {@link #commit()} (and is then reset to null).
+     * Lets a single-threaded test simulate another thread which acts just while this object is being read or saved,
+     * e.g. removes it from its queue.
+     */
+    public Runnable beforeNextAccess;
+
+    /**
      * True once {@link #close()} succeeded.
      */
     public boolean closed;
@@ -77,9 +89,23 @@ public class FailingCachedObject<V extends Serializable> implements CachedObject
         this.value = value;
     }
 
+    /**
+     * Runs {@link #beforeNextAccess} once, if it is set.
+     */
+    private void runBeforeNextAccess()
+    {
+        Runnable hook = this.beforeNextAccess;
+
+        this.beforeNextAccess = null;
+
+        if (hook != null) hook.run();
+    }
+
     @Override
     public V get() throws Exception
     {
+        this.runBeforeNextAccess();
+
         if (this.closed) throw new IllegalStateException("closed");
         if (this.failOnGet != null) throw this.failOnGet;
 
@@ -90,6 +116,7 @@ public class FailingCachedObject<V extends Serializable> implements CachedObject
     public void commit() throws Exception
     {
         this.commitCalls++;
+        this.runBeforeNextAccess();
 
         if (this.closed) throw new IllegalStateException("closed");
         if (this.failOnCommit != null) throw this.failOnCommit;
@@ -99,6 +126,7 @@ public class FailingCachedObject<V extends Serializable> implements CachedObject
     public void close() throws IOException
     {
         this.closeCalled = true;
+        this.closeCalls++;
 
         if (this.failOnClose != null) throw this.failOnClose;
 
