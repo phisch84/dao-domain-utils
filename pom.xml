@@ -18,6 +18,7 @@
         <maven-surefire-plugin.version>3.5.5</maven-surefire-plugin.version>
         <maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
         <jacoco-maven-plugin.version>0.8.16</jacoco-maven-plugin.version>
+        <pitest-maven.version>1.25.9</pitest-maven.version>
         <junit.version>4.13.2</junit.version>
     </properties>
 
@@ -148,6 +149,32 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+
+            <!--
+            Mutation testing as a report only: PIT changes the code in small ways (mutants) and reports every change
+            which no test detects. It is not bound to a phase, because a run takes minutes; start it explicitly:
+            mvn -B clean test-compile org.pitest:pitest-maven:mutationCoverage
+            The report is target/pit-reports/index.html (and mutations.xml / mutations.csv for tools).
+            -->
+            <plugin>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-maven</artifactId>
+                <version>${pitest-maven.version}</version>
+                <configuration>
+                    <targetClasses>
+                        <param>com.schoste.ddd.util.*</param>
+                    </targetClasses>
+                    <targetTests>
+                        <param>com.schoste.ddd.util.*UT</param>
+                    </targetTests>
+                    <outputFormats>
+                        <param>HTML</param>
+                        <param>XML</param>
+                        <param>CSV</param>
+                    </outputFormats>
+                    <timestampedReports>false</timestampedReports>
+                </configuration>
             </plugin>
         </plugins>
     </build>

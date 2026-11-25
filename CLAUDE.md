@@ -19,11 +19,16 @@ User-facing documentation is in `README.md`; the contract of each class is its J
 | Definition of done (tests + strict Javadoc) | `mvn -B clean verify` |
 | One test class | `mvn -B test -Dtest=CachedHashMapImplUT` |
 | Some test methods | `mvn -B test -Dtest='CachedHashMapImplUT#testClone*'` |
+| Mutation testing (PIT, ~1 min) | `mvn -B clean test-compile org.pitest:pitest-maven:mutationCoverage` |
 
 - Use `verify`, not just `test`: only `verify` runs the Javadoc check, which fails the build on any finding.
 - `verify` also writes the JaCoCo coverage report: `target/site/jacoco/index.html`, per line in `jacoco.xml`,
   per class in `jacoco.csv` (easiest to read in a terminal). It has no thresholds and never fails the build.
   Use it to find untested branches when adding tests; with `-Dtest=...` it only covers those tests.
+- PIT (mutation testing) is a report only and not part of `verify`. It writes `target/pit-reports/index.html` and
+  `mutations.csv` (one line per mutant: file, class, mutator, method, line, status, killing test). After adding tests,
+  run it and look at the lines whose status isn't `KILLED`; a surviving mutant is a change no test notices.
+  Instead of the hand-written `sed` mutations, use it to check that new tests can fail.
 - Use `clean` when results look odd: the IDE (VS Code Java / Eclipse compiler) also compiles into `target/`,
   and Maven then runs stale classes ("Unresolved compilation problem").
 - CI (`.github/workflows/build.yml`) runs `mvn -B verify` on JDK 21 and 25 for every push and pull request.

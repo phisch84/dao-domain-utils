@@ -264,6 +264,15 @@ mvn clean verify
 
 This runs the tests and the strict Javadoc check, which fails the build on any finding.
 It also writes a test coverage report to `target/site/jacoco/index.html` (JaCoCo; report only, no thresholds).
+
+Mutation testing (PIT) checks whether the tests notice small changes to the code. It takes about a minute
+and is therefore not part of `verify`:
+
+```sh
+mvn clean test-compile org.pitest:pitest-maven:mutationCoverage
+```
+
+The report is written to `target/pit-reports/index.html`.
 Contributor and AI-assistant notes (architecture, design decisions, conventions) are in [CLAUDE.md](CLAUDE.md).
 
 ## License
