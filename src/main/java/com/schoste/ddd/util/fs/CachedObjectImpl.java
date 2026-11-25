@@ -328,9 +328,13 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         }
     }
 
-    /**    (non-Javadoc)
+    /**
+     * Compares the cached objects of both instances (see {@link com.schoste.ddd.util.CachedObject#equals(Object)}).
+     * Returns false, without writing anything, if one of the objects can't be read (e.g. an instance was closed).
      *
      * @see java.lang.Object#equals(java.lang.Object)
+     * @param other the object to compare to
+     * @return true if other is a cached object whose object is equal to the object of this instance
      */
     @SuppressWarnings("unchecked")
     @Override
@@ -351,7 +355,7 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         }
         catch (Exception e)
         {
-            e.printStackTrace(System.err);
+            // an object which can't be read is not equal to anything; the result already says so
         }
 
         return false;

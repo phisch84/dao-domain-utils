@@ -91,7 +91,8 @@ Checklist for a new utility or implementation:
   cache file and holds its own instance.
 - `close()` does nothing on an instance that is already closed or was never initialized (no-arg constructor);
   `hashCode()` still works after `close()`, `get()`/`commit()` throw `IllegalStateException`,
-  `equals` is false (it can't read the object).
+  `equals` is false (it can't read the object). The library never writes to `System.err`/`System.out`:
+  failures are thrown (with cause) or, in `equals`, are the `false` result.
 - `fs.CachedObjectImpl` deletes cache files on `close()`; files that were not closed are deleted by
   one shutdown hook (tracked in `cacheFilesToDeleteOnExit`). Don't use `File#deleteOnExit()`, it leaks.
 - `objRef` is read and written only under `objRefLock` (also the closed/null check), except while an instance

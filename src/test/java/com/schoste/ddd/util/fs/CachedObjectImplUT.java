@@ -6,6 +6,7 @@ import java.io.File;
 import java.io.NotSerializableException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -204,6 +205,36 @@ public class CachedObjectImplUT extends CachedObjectUT
         {
             TestHelpers.deleteRecursively(storage);
         }
+    }
+
+    /**
+     * Asserts that {@link CachedObjectImpl#equals(Object)} returns false for a closed instance without writing
+     * anything to {@link System#err}: the result already says that the objects can't be compared.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testEqualsWithClosedInstanceWritesNothingToSystemErr() throws Exception
+    {
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        PrintStream originalErr = System.err;
+
+        try (CachedObjectImpl<String> testObj = new CachedObjectImpl<String>("testEqualsWithClosedInstance"))
+        {
+            CachedObjectImpl<String> closedObj = new CachedObjectImpl<String>("testEqualsWithClosedInstance");
+
+            closedObj.close();
+            System.setErr(new PrintStream(err, true));
+
+            Assert.assertNotEquals(testObj, closedObj);
+            Assert.assertNotEquals(closedObj, testObj);
+        }
+        finally
+        {
+            System.setErr(originalErr);
+        }
+
+        Assert.assertEquals("", err.toString());
     }
 
     /**
