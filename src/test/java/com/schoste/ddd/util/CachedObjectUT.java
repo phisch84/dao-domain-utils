@@ -7,6 +7,7 @@ import java.io.ObjectOutputStream;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Assert;
 import org.junit.Assume;
@@ -255,5 +256,102 @@ abstract public class CachedObjectUT
                 Assert.assertEquals(Arrays.asList("committed", "uncommitted"), oneCachedObj.get());
             }
         }
+    }
+
+    /**
+     * An operation on a cached object, which may throw any exception.
+     */
+    @FunctionalInterface
+    protected interface CachedObjectOperation
+    {
+        /**
+         * Runs the operation.
+         *
+         * @param cachedObj the cached object to operate on
+         * @throws Exception re-throws every exception
+         */
+        void run(CachedObject<String> cachedObj) throws Exception;
+    }
+
+    /**
+     * Runs the operation in another thread, which is blocked on the lock of the cached object,
+     * closes the cached object while that thread waits and returns what the operation threw (or null).
+     * The other thread has passed every check before the lock, so this simulates
+     * {@link CachedObject#close()} running concurrently between the check and the lock.
+     *
+     * @param operation the operation to run concurrently to closing
+     * @return the exception thrown by the operation, or null
+     * @throws Exception re-throws every exception
+     */
+    protected Throwable closeWhileBlockedOnLock(CachedObjectOperation operation) throws Exception
+    {
+        final CachedObject<String> testObj = this.createCachedObj("closeWhileBlockedOnLock");
+
+        Assume.assumeTrue(testObj instanceof AbstractCachedObject);
+
+        final AbstractCachedObject<String> abstractObj = (AbstractCachedObject<String>) testObj;
+        final AtomicReference<Throwable> thrown = new AtomicReference<>();
+        Thread operationThread = new Thread(() ->
+        {
+            try
+            {
+                operation.run(testObj);
+            }
+            catch (Throwable t)
+            {
+                thrown.set(t);
+            }
+        });
+
+        synchronized (abstractObj.objRefLock)
+        {
+            operationThread.start();
+
+            long deadline = System.currentTimeMillis() + 10_000;
+
+            while (operationThread.getState() != Thread.State.BLOCKED)
+            {
+                Assert.assertTrue("operation thread did not block on the lock", System.currentTimeMillis() < deadline);
+                Assert.assertTrue("operation thread ended without blocking on the lock", operationThread.isAlive());
+
+                Thread.yield();
+            }
+
+            testObj.close();
+        }
+
+        operationThread.join(10_000);
+
+        Assert.assertFalse(operationThread.isAlive());
+
+        return thrown.get();
+    }
+
+    /**
+     * Asserts that {@link CachedObject#get()} throws {@link IllegalStateException}
+     * (and no {@link NullPointerException}) if the instance is closed by another thread while get waits for the lock.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testGetConcurrentToClose() throws Exception
+    {
+        Throwable thrown = this.closeWhileBlockedOnLock(CachedObject::get);
+
+        Assert.assertTrue(String.valueOf(thrown), thrown instanceof IllegalStateException);
+    }
+
+    /**
+     * Asserts that {@link CachedObject#commit()} throws {@link IllegalStateException}
+     * (and no {@link NullPointerException}) if the instance is closed by another thread while commit waits for the lock.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testCommitConcurrentToClose() throws Exception
+    {
+        Throwable thrown = this.closeWhileBlockedOnLock(CachedObject::commit);
+
+        Assert.assertTrue(String.valueOf(thrown), thrown instanceof IllegalStateException);
     }
 }

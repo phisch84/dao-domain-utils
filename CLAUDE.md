@@ -79,6 +79,10 @@ Checklist for a new utility or implementation:
   cache file and holds its own instance.
 - `fs.CachedObjectImpl` deletes cache files on `close()`; files that were not closed are deleted by
   one shutdown hook (tracked in `cacheFilesToDeleteOnExit`). Don't use `File#deleteOnExit()`, it leaks.
+- `objRef` is read and written only under `objRefLock` (also the closed/null check), except while an instance
+  isn't published yet (constructor, `readObject`, `clone`). That's why it needs no `volatile`. A concurrent
+  `close()` makes `get()`/`commit()` throw `IllegalStateException` (tested deterministically by
+  `closeWhileBlockedOnLock` in `CachedObjectUT`).
 - `fs.CachedObjectImpl` creates each cache file atomically (`Files.createFile`, next name on
   `FileAlreadyExistsException`), so instances created concurrently in one folder (also by other JVMs) never
   share a file. Never check-then-create (`exists()` + write) or use fixed helper file names in the folder

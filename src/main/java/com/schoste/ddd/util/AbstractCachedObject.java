@@ -18,6 +18,7 @@ abstract public class AbstractCachedObject<T extends Serializable> implements Ca
     /**
      * Weak reference to the cached object, so that the garbage collector may reclaim it.
      * Is null if the instance was not initialized or was closed.
+     * Once the instance is published to other threads, read and write it only while holding {@link #objRefLock}.
      */
     protected transient WeakReference<T> objRef;
 
@@ -61,10 +62,11 @@ abstract public class AbstractCachedObject<T extends Serializable> implements Ca
      */
     public T get() throws IllegalStateException, Exception
     {
-        if (this.objRef == null) throw new IllegalStateException();
-
         synchronized (this.objRefLock)
         {
+            // checked inside the lock, so a concurrent close() can't set objRef to null after the check
+            if (this.objRef == null) throw new IllegalStateException();
+
             T obj = this.objRef.get();
 
             if (obj == null)
@@ -84,10 +86,11 @@ abstract public class AbstractCachedObject<T extends Serializable> implements Ca
      */
     public void commit() throws IllegalStateException, Exception
     {
-        if (this.objRef == null) throw new IllegalStateException();
-
         synchronized (this.objRefLock)
         {
+            // checked inside the lock, so a concurrent close() can't set objRef to null after the check
+            if (this.objRef == null) throw new IllegalStateException();
+
             T obj = this.objRef.get();
 
             // if the object was garbage collected, there is nothing in memory to save
