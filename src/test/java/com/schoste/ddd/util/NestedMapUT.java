@@ -484,6 +484,36 @@ abstract public class NestedMapUT
     }
 
     /**
+     * Asserts that reading, removing and clearing through the sub map of a path which doesn't exist
+     * (here: the first key exists, the second doesn't) work like on an empty map, and don't create the path.
+     *
+     * @throws Exception re-throws every exception
+     */
+    @Test
+    public void testSubMapOfMissingPathDoesntCreatePath() throws Exception
+    {
+        NestedMap<String, String> map = this.createNestedMap();
+
+        map.put("a", "v");
+
+        NestedMap<String, String> sub = map.getSubMap("a", "b");
+
+        Assert.assertEquals(0, sub.size());
+        Assert.assertTrue(sub.isEmpty());
+        Assert.assertFalse(sub.containsKey("c"));
+        Assert.assertNull(sub.get("c"));
+        Assert.assertNull(sub.remove("c"));
+        Assert.assertTrue(sub.getSubMap("c").isEmpty());
+
+        sub.clear();
+
+        Assert.assertEquals(1, map.size());
+        Assert.assertEquals("v", map.get("a"));
+        Assert.assertEquals(set("a"), map.keySet());
+        Assert.assertTrue("the path was created", map.getSubMap("a").keySet().isEmpty());
+    }
+
+    /**
      * Asserts that a sub map stays usable when its level is pruned and created again.
      *
      * @throws Exception re-throws every exception

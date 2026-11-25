@@ -76,6 +76,11 @@ abstract public class AbstractNestedMap<K, V> implements NestedMap<K, V>
             super(owner, path);
         }
 
+        /**
+         * Never called: the levels belong to the owner, and every value map is created by the owner
+         * ({@code put} calls {@code owner.createValueMap()}, and a sub map can't be cloned).
+         * Implemented only because the method is abstract; it delegates to the owner in case that changes.
+         */
         @Override
         protected Map<K, V> createValueMap()
         {
