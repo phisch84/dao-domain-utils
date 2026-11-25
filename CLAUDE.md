@@ -27,6 +27,8 @@ User-facing documentation is in `README.md`; the contract of each class is its J
 - Use `clean` when results look odd: the IDE (VS Code Java / Eclipse compiler) also compiles into `target/`,
   and Maven then runs stale classes ("Unresolved compilation problem").
 - CI (`.github/workflows/build.yml`) runs `mvn -B verify` on JDK 21 and 25 for every push and pull request.
+  Each successful run keeps the coverage report of JDK 21 as artifact `coverage-report` (30 days);
+  failed runs keep the Surefire reports.
 
 ## Code map
 

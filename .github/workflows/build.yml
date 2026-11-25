@@ -36,6 +36,16 @@ jobs:
       - name: Build, test and check Javadoc
         run: mvn -B -ntp verify
 
+      # The coverage report (JaCoCo, written by mvn verify) is the same on both JDKs, so it is kept once.
+      # Only after a successful build: a failed build stops before the report is written.
+      - name: Upload coverage report
+        if: matrix.java == '21'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: target/site/jacoco/
+          retention-days: 30
+
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v4
