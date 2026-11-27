@@ -74,7 +74,12 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
      */
     static final int MAX_ACCESS_DENIED_RETRIES = 100;
 
-    static private String initializeCacheFileFolder(String storagePath) throws IllegalArgumentException, IllegalStateException, Exception
+    /**
+     * Creates the folder if it doesn't exist and checks that it is a folder.
+     * It returns nothing on purpose: callers use their storage path as is, so no mutant of mutation testing (PIT) can
+     * replace the folder with an empty path, which would put cache files into the working directory.
+     */
+    static private void initializeCacheFileFolder(String storagePath) throws IllegalArgumentException, IllegalStateException, Exception
     {
         if (storagePath == null) throw new IllegalArgumentException("storagePath");
 
@@ -82,8 +87,6 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
 
         if (!Files.exists(_storagePath)) Files.createDirectories(_storagePath);
         if (!Files.isDirectory(_storagePath)) throw new IllegalArgumentException("storagePath");
-
-        return _storagePath.toString();
     }
 
     /**
@@ -276,9 +279,9 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
         if (object == null) throw new IllegalArgumentException("object");
         if (storagePath == null) throw new IllegalArgumentException("storagePath");
 
-        String pathToCacheFile = CachedObjectImpl.initializeCacheFileFolder(storagePath);
+        CachedObjectImpl.initializeCacheFileFolder(storagePath);
 
-        this.cacheFile = CachedObjectImpl.initializeCacheFile(pathToCacheFile, object);
+        this.cacheFile = CachedObjectImpl.initializeCacheFile(storagePath, object);
         this.cacheFilePath = this.cacheFile.getAbsolutePath();
         this.objRef = new WeakReference<T>(object);
         this.objHashCode = object.hashCode();

@@ -32,8 +32,11 @@ User-facing documentation is in `README.md`; the contract of each class is its J
   run it and look at the lines whose status isn't `KILLED`; a surviving mutant is a change no test notices.
   Instead of the hand-written `sed` mutations, use it to check that new tests can fail.
   PIT ends its test JVMs without shutdown hooks, so cache files the tests leave to the hook stay behind; PIT's
-  `java.io.tmpdir` is therefore `target/` (removed by `clean`), and `.gitignore` ignores 13-digit file names in the
-  repo root (a mutant can redirect a cache file there).
+  `java.io.tmpdir` is therefore `target/` (removed by `clean`). A mutant must never be able to turn a cache file's
+  folder into `""`: that resolves against the working directory (the repo root), so a method must not return the
+  storage path for callers to use (`CachedObjectImpl.initializeCacheFileFolder` returns `void` for that reason).
+  `-Duser.dir` doesn't help: java.nio resolves relative paths with it, java.io with the process's real working
+  directory. `.gitignore` still ignores 13-digit file names in the repo root, as a safety net.
   Accepted survivors (equivalent or not testable; don't write tests for them), all others must be killed:
   - `CachedObjectImpl.initializeCacheFile`: `cacheFileName++` → `--` (counting down also finds a free name), and the
     suppressed delete failure (the file system can't be made to refuse a delete in a test).
