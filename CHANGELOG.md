@@ -21,5 +21,8 @@ The first release. All classes are in `com.schoste.ddd.util`; the file system im
 - `RunningStatistics`: thread-safe online statistics (count, sum, min, max, mean, variance and standard deviation of the
   population and the sample), which can be combined.
 - The contract tests ship as test-jar (`tests` classifier), so other implementations can reuse them.
+- With Java modules (JPMS), the jar is the automatic module `com.schoste.ddd.util`.
+- Documentation in the artifacts: the Javadoc jar starts with an overview (what to instantiate, the rules of all cached
+  types, an example); the jar and the sources jar contain `META-INF/README.md`, `CHANGELOG.md` and `LICENSE`.
 
 **Built with** JDK 21 and tested with JDK 21 and 25; compiled for Java 8.

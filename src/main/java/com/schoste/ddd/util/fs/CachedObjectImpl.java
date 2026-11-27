@@ -246,8 +246,9 @@ public class CachedObjectImpl<T extends Serializable> extends AbstractCachedObje
     }
 
     /**
-     * Constructor for serialization and deserializion.
-     * When used for any other purpose, the created instance is expect not work and its method will throw {@link java.lang.IllegalStateException}
+     * Constructor for serialization and deserialization only.
+     * An instance created with it for any other purpose holds no object: {@link #get()} and {@link #commit()} throw
+     * {@link java.lang.IllegalStateException}.
      */
     public CachedObjectImpl() { }
 

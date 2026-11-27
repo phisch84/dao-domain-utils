@@ -1,5 +1,5 @@
 /**
- * Contains helper classes analog to {@link java.util}: holders whose data is kept in a storage and only weakly in memory,
+ * Contains helper classes similar to those of {@link java.util}: holders whose data is kept in a storage and only weakly in memory,
  * so the garbage collector may reclaim it and it is loaded again on demand, a map with key paths, a thread-safe queue,
  * and online statistics.
  * <ul>
@@ -21,6 +21,32 @@
  * {@link com.schoste.ddd.util.AbstractCachedQueue}). Implementations for a specific storage are in sub-packages, e.g.
  * {@link com.schoste.ddd.util.fs} for the file system. Types without storage, like
  * {@link com.schoste.ddd.util.RunningStatistics}, are single classes.
+ * </p>
+ * <p>
+ * <b>What to instantiate:</b> declare variables with the interface and create
+ * {@link com.schoste.ddd.util.fs.CachedObjectImpl}, {@link com.schoste.ddd.util.fs.CachedHashMapImpl},
+ * {@link com.schoste.ddd.util.fs.CachedNestedHashMapImpl} or {@link com.schoste.ddd.util.fs.CachedQueueImpl}
+ * (each with a folder for its cache files, or {@code java.io.tmpdir} without one), {@link com.schoste.ddd.util.NestedHashMap}
+ * for an in-memory {@link com.schoste.ddd.util.NestedMap}, and {@link com.schoste.ddd.util.RunningStatistics} directly.
+ * The {@code Abstract*} classes are only for implementing another storage.
+ * </p>
+ * <p>
+ * <b>Rules of all cached types</b> (the interfaces have the details):
+ * </p>
+ * <ul>
+ * <li>Save changes while you hold a reference ({@code commit()}, or {@code put} again); changes which weren't saved are lost
+ *     once the value is garbage collected.</li>
+ * <li>Returned values may be copies loaded from the storage, not the instances which were put.</li>
+ * <li>Close the holder when done (try-with-resources): {@code close()} frees the storage. Removing or replacing a value
+ *     frees its storage too.</li>
+ * <li>Values must be {@link java.io.Serializable}; null values are rejected; a cached object's hash code must not change.</li>
+ * <li>Serializing a cached type writes references to the storage only, not the values: commit before.</li>
+ * <li>{@link com.schoste.ddd.util.CachedObject}, {@link com.schoste.ddd.util.CachedQueue} and
+ *     {@link com.schoste.ddd.util.RunningStatistics} are thread-safe; the maps are not.</li>
+ * </ul>
+ * <p>
+ * The guide with examples is {@code META-INF/README.md} in the jar, also at
+ * <a href="https://github.com/phisch84/dao-domain-utils">github.com/phisch84/dao-domain-utils</a>.
  * </p>
  */
 package com.schoste.ddd.util;

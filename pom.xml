@@ -11,8 +11,9 @@
     <description>
         Helper classes for the DDD libraries dao and domain-repository: memory-saving holders whose data lives in a storage
         and is kept in memory only weakly (CachedObject, CachedHashMap, CachedNestedMap, CachedQueue), a map with key paths
-        (NestedMap) and online statistics (RunningStatistics). Documentation: the README of the GitHub repository and the
-        Javadoc of the artifacts.
+        (NestedMap) and online statistics (RunningStatistics). The file system implementations are in com.schoste.ddd.util.fs.
+        Java 8 or later, no runtime dependencies. Documentation: start with the overview of the Javadoc jar; the README
+        (also in the jar as META-INF/README.md) has more examples. The test jar (classifier tests) contains the contract tests.
     </description>
     <url>https://github.com/phisch84/dao-domain-utils</url>
     <licenses>
@@ -63,6 +64,22 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- Users of the package see only the artifacts, not the repository: the guide, the changelog and the license
+                 (which MIT requires in every copy) ship in META-INF of the jar and of the sources jar -->
+            <resource>
+                <directory>${project.basedir}</directory>
+                <targetPath>META-INF</targetPath>
+                <includes>
+                    <include>README.md</include>
+                    <include>CHANGELOG.md</include>
+                    <include>LICENSE</include>
+                </includes>
+            </resource>
+        </resources>
         <pluginManagement>
             <plugins>
                 <!-- Build and compiler plugin configuration -->
@@ -88,6 +105,19 @@
                             <goals>
                                 <goal>test-jar</goal>
                             </goals>
+                        </execution>
+                        <!-- The module name of the main jar for projects using Java modules (JPMS); without it, it would be
+                             "utils", taken from the file name. Part of the public API: changing it breaks those projects.
+                             Only the main jar: the test-jar has the same packages and must not claim the same name. -->
+                        <execution>
+                            <id>default-jar</id>
+                            <configuration>
+                                <archive>
+                                    <manifestEntries>
+                                        <Automatic-Module-Name>com.schoste.ddd.util</Automatic-Module-Name>
+                                    </manifestEntries>
+                                </archive>
+                            </configuration>
                         </execution>
                     </executions>
                     <configuration>
@@ -143,6 +173,8 @@
                         </goals>
                         <configuration>
                             <doclint>all</doclint>
+                            <!-- the start page of the Javadoc: what to instantiate, the rules of all cached types, an example -->
+                            <overview>${project.basedir}/src/main/javadoc/overview.html</overview>
                         </configuration>
                     </execution>
                     <execution>

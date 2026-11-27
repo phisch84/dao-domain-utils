@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DDD Utils</title>
+</head>
+<body>
+<p>DDD Utils ({@code com.schoste.ddd:utils}): helper classes for the DDD libraries dao and domain-repository, and for projects
+that use them. Java 8 or later, no runtime dependencies. The full guide with more examples is the README of the source
+repository, <a href="https://github.com/phisch84/dao-domain-utils">github.com/phisch84/dao-domain-utils</a>; it also ships in the
+jar as {@code META-INF/README.md}, next to {@code CHANGELOG.md} and {@code LICENSE}.</p>
+
+<h1>Where to start</h1>
+<p>Declare variables with the interface (it has the usage rules in its documentation) and create the implementation:</p>
+<table>
+<caption>Types and what to instantiate</caption>
+<tr><th>Interface</th><th>Create with</th><th>What it does</th></tr>
+<tr><td>{@link com.schoste.ddd.util.CachedObject}</td><td>{@link com.schoste.ddd.util.fs.CachedObjectImpl}</td>
+    <td>Holds one {@code Serializable} object, keeps it in memory only weakly and reloads it from a cache file on demand.</td></tr>
+<tr><td>{@link com.schoste.ddd.util.CachedHashMap}</td><td>{@link com.schoste.ddd.util.fs.CachedHashMapImpl}</td>
+    <td>A {@code java.util.Map} whose values are each kept in a {@code CachedObject}, so large maps don't fill the heap.</td></tr>
+<tr><td>{@link com.schoste.ddd.util.NestedMap}</td><td>{@link com.schoste.ddd.util.NestedHashMap}</td>
+    <td>A map with key paths (a trie): {@code put(k1, k2, k3, value)}, {@code get(k1, k2, k3)}, {@code getSubMap(k1)}.</td></tr>
+<tr><td>{@link com.schoste.ddd.util.CachedNestedMap}</td><td>{@link com.schoste.ddd.util.fs.CachedNestedHashMapImpl}</td>
+    <td>A {@code NestedMap} whose values are cached like in a {@code CachedHashMap}.</td></tr>
+<tr><td>{@link com.schoste.ddd.util.CachedQueue}</td><td>{@link com.schoste.ddd.util.fs.CachedQueueImpl}</td>
+    <td>A thread-safe FIFO {@code java.util.Queue} whose elements are each kept in a {@code CachedObject}.</td></tr>
+<tr><td>(a class)</td><td>{@link com.schoste.ddd.util.RunningStatistics}</td>
+    <td>Thread-safe count, sum, min, max, mean, variance and standard deviation, one data point at a time.</td></tr>
+</table>
+<p>The {@code Abstract*} classes are for writing an implementation for another storage. The test jar (classifier
+{@code tests}) contains the contract tests every implementation must pass.</p>
+
+<h1>Rules for all cached types</h1>
+<ul>
+<li><b>Save changes while you hold a reference:</b> {@code put}/{@code offer} save a value; save a changed value with
+    {@code commit()} (or {@code put} again). Changes that weren't saved are lost once the value is garbage collected.</li>
+<li><b>Values may be copies:</b> once a value was garbage collected, {@code get} returns a copy loaded from the storage.</li>
+<li><b>Close when done:</b> {@code close()} deletes the cache files (use try-with-resources); files that weren't closed are
+    deleted when the JVM exits. Removing or replacing a value deletes its cache file.</li>
+<li><b>Values must be {@code Serializable}</b>, null values are rejected, and a cached object's hash code must not change.</li>
+<li><b>Serializing</b> a cached type writes only references to its cache files, not the values: commit first; the copy
+    shares the files with the original.</li>
+<li><b>Threads:</b> {@code CachedObject}, {@code CachedQueue} and {@code RunningStatistics} are thread-safe; the maps are not
+    (like {@code java.util.HashMap}).</li>
+<li><b>Storage errors</b> in methods of {@code java.util} interfaces are thrown as {@code IllegalStateException} with the
+    original exception as cause.</li>
+</ul>
+
+<h1>Example</h1>
+<pre>
+try (CachedHashMap&lt;String, ArrayList&lt;String&gt;&gt; map = new CachedHashMapImpl&lt;&gt;("/var/cache/my-app"))
+{
+    map.put("a", new ArrayList&lt;&gt;(Arrays.asList("1")));   // put() saves the value
+
+    ArrayList&lt;String&gt; a = map.get("a");                  // may be a copy loaded from the cache file
+
+    a.add("2");
+    map.commit();                                       // saves all values which are in memory
+}                                                       // close() deletes all cache files
+
+NestedMap&lt;String, Integer&gt; population = new NestedHashMap&lt;&gt;();
+
+population.put("europe", "austria", "vienna", 2_000_000);
+population.get("europe", "austria", "vienna");          // 2000000
+population.getSubMap("europe").size();                  // 1: values at any depth
+
+RunningStatistics stats = new RunningStatistics();
+
+stats.accept(2.0);
+stats.accept(4.0);
+stats.getMean();                                        // 3.0
+stats.getSampleStandardDeviation();                     // 1.414...
+</pre>
+</body>
+</html>

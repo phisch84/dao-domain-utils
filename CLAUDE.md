@@ -13,6 +13,14 @@ storage and is kept in memory only weakly, a map with key paths, a thread-safe q
 - `RunningStatistics`: thread-safe count, sum, min, max, mean, variance and standard deviation, one data point at a time.
 
 User-facing documentation is in `README.md`; the contract of each class is its Javadoc.
+Users get only the Maven artifacts, not this repository, so the user documentation must work from them:
+
+- `src/main/javadoc/overview.html` is the start page of the Javadoc jar: what to instantiate, the rules of all cached
+  types, an example. `com/schoste/ddd/util/package-info.java` repeats what to instantiate and the rules briefly, because
+  IDEs and AI assistants read the sources jar, which doesn't contain the overview.
+- `README.md`, `CHANGELOG.md` and `LICENSE` are copied into `META-INF/` of the jar and the sources jar (`<resources>` in
+  `pom.xml`); the overview and the package-info point there.
+- When a type, a rule or an example changes, update README, overview, package-info and the interface Javadoc together.
 
 ## Commands
 
@@ -108,7 +116,8 @@ Checklist for a new utility or implementation:
 - [ ] Every way to remove or replace something frees its storage (`close()`).
 - [ ] Decide the thread safety and state it in the interface Javadoc and `README.md` (the maps are not thread-safe,
       `CachedQueue` is); a thread-safe type needs concurrency tests (see Tests).
-- [ ] `mvn -B clean verify` passes; update `README.md` (users) and this file (decisions, code map).
+- [ ] `mvn -B clean verify` passes; update `README.md`, the Javadoc overview and the `util` package-info (users), and
+      this file (decisions, code map).
 
 ## Design decisions (don't change without asking)
 
@@ -340,6 +349,9 @@ Checklist for a new utility or implementation:
   with id `github` in `~/.m2/settings.xml` (token with `write:packages`); don't use it for releases.
 - Published artifacts: the jar, `-sources`, `-javadoc`, and for the contract tests `-tests`, `-test-sources`,
   `-test-javadoc`. The sources jars let IDEs and AI assistants in consuming projects read the usage rules.
+- The main jar's manifest has `Automatic-Module-Name: com.schoste.ddd.util` (execution `default-jar` of the jar plugin;
+  not the test-jar, which has the same packages). It is public API: don't change it without asking, it breaks every
+  project which `requires` it. A real `module-info.java` is not possible while the code compiles for Java 8.
 - Versions: release versions end with `.RELEASE` (e.g. `1.0.0.RELEASE`), development versions with `-SNAPSHOT`, like the
   other DDD libraries. `CHANGELOG.md` lists the changes per version for users; a version without a date isn't released.
 

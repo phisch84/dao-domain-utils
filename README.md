@@ -324,6 +324,8 @@ The library is published to GitHub Packages. Add the repository and the dependen
 </dependencies>
 ```
 
+With Java modules (JPMS), the jar is the automatic module `com.schoste.ddd.util`: `requires com.schoste.ddd.util;`.
+
 GitHub Packages requires authentication even for public packages. Add a server with the same id to
 your `~/.m2/settings.xml`, using a [personal access token](https://github.com/settings/tokens)
 with the `read:packages` scope:
