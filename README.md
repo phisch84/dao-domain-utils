@@ -6,6 +6,10 @@ code that belongs to none of the infrastructure, domain or application layers.
 
 Requires Java 8 or newer. No runtime dependencies.
 
+> **Status:** this page describes version 1.0.0 (`1.0.0.RELEASE`), the first release;
+> what changed between the versions is in the [changelog](CHANGELOG.md).
+> The Javadoc of each type is the complete reference; this page is the entry point.
+
 | Class | What it does |
 |---|---|
 | [`CachedObject<T>`](#cachedobject) | Holds one `Serializable` object, keeps it in memory only weakly and reloads it from a storage on demand |
@@ -315,7 +319,7 @@ The library is published to GitHub Packages. Add the repository and the dependen
     <dependency>
         <groupId>com.schoste.ddd</groupId>
         <artifactId>utils</artifactId>
-        <version>1.0-SNAPSHOT</version>
+        <version>1.0.0.RELEASE</version>
     </dependency>
 </dependencies>
 ```

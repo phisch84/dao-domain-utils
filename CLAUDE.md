@@ -335,6 +335,20 @@ Checklist for a new utility or implementation:
 ## Publishing
 
 - Deploys to GitHub Packages: `https://maven.pkg.github.com/phisch84/dao-domain-utils`.
-- `mvn deploy` needs a `<server>` with id `github` in `~/.m2/settings.xml` (token with `write:packages`).
+- Releases are deployed by CI: `.github/workflows/publish.yml` runs `mvn deploy` (tests and Javadoc check included) with
+  JDK 21 when a GitHub release is **published** (not when a draft is saved). A local `mvn deploy` would need a `<server>`
+  with id `github` in `~/.m2/settings.xml` (token with `write:packages`); don't use it for releases.
 - Published artifacts: the jar, `-sources`, `-javadoc`, and for the contract tests `-tests`, `-test-sources`,
   `-test-javadoc`. The sources jars let IDEs and AI assistants in consuming projects read the usage rules.
+- Versions: release versions end with `.RELEASE` (e.g. `1.0.0.RELEASE`), development versions with `-SNAPSHOT`, like the
+  other DDD libraries. `CHANGELOG.md` lists the changes per version for users; a version without a date isn't released.
+
+### Releasing
+
+1. Set the release version in `pom.xml` and in the README (status line and installation snippet), and date the version
+   in `CHANGELOG.md`. `mvn -B clean verify` must pass; push, and the build workflow must be green on both JDKs.
+2. On GitHub, create a release with the tag `X.Y.Z.RELEASE` on the commit CI tested (on `master`), with the version's
+   changelog section as notes, and publish it (not as draft): `publish.yml` builds, tests and deploys all artifacts.
+3. GitHub Packages refuses to overwrite a version: if the deploy fails after some artifacts were uploaded, delete that
+   package version on GitHub before publishing again. The version stays at the release afterwards; the next change
+   starts a new version (`-SNAPSHOT`, with an undated section in `CHANGELOG.md`).

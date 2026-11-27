@@ -8,6 +8,36 @@
     <artifactId>utils</artifactId>
     <name>DDD Utils</name>
     <version>1.0.0.RELEASE</version>
+    <description>
+        Helper classes for the DDD libraries dao and domain-repository: memory-saving holders whose data lives in a storage
+        and is kept in memory only weakly (CachedObject, CachedHashMap, CachedNestedMap, CachedQueue), a map with key paths
+        (NestedMap) and online statistics (RunningStatistics). Documentation: the README of the GitHub repository and the
+        Javadoc of the artifacts.
+    </description>
+    <url>https://github.com/phisch84/dao-domain-utils</url>
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://github.com/phisch84/dao-domain-utils/blob/master/LICENSE</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <name>Philipp Schosteritsch</name>
+            <email>s.philipp@schoste.com</email>
+            <url>https://www.schoste.com/</url>
+        </developer>
+    </developers>
+    <scm>
+        <connection>scm:git:https://github.com/phisch84/dao-domain-utils.git</connection>
+        <developerConnection>scm:git:https://github.com/phisch84/dao-domain-utils.git</developerConnection>
+        <url>https://github.com/phisch84/dao-domain-utils</url>
+    </scm>
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/phisch84/dao-domain-utils/issues</url>
+    </issueManagement>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
